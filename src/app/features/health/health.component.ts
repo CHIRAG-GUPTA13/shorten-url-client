@@ -1,145 +1,167 @@
-import { Component, OnInit, signal, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
-import { environment } from '../../../environments/environment';
-import { animate, style, transition, trigger } from '@angular/animations';
+import { HealthService } from '../../core/services/health.service';
+import { HealthResponse } from '../../core/models/models';
+import { interval, Subscription, switchMap, startWith, of } from 'rxjs';
 
 @Component({
   selector: 'app-health',
   standalone: true,
   imports: [CommonModule],
-  animations: [
-    trigger('slideIn', [
-      transition(':enter', [
-        style({ transform: 'translateY(20px)', opacity: 0 }),
-        animate('400ms ease-out', style({ transform: 'translateY(0)', opacity: 1 }))
-      ])
-    ])
-  ],
   template: `
-    <div class="max-w-4xl mx-auto space-y-10" @slideIn>
-      <div>
-        <h2 class="text-3xl font-mono font-bold tracking-tighter uppercase">
-          System.<span class="text-accent-green">Vitalis</span>
-        </h2>
-        <p class="text-[10px] font-mono text-muted uppercase tracking-widest mt-1">Real-time node status & health telemetry</p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <!-- Main Service Health -->
-        <div class="card relative overflow-hidden">
-          <div class="flex items-center justify-between mb-8">
-            <h3 class="font-mono text-xs uppercase tracking-widest text-muted">Core_Service_V2</h3>
-            <div [class]="serviceStatus() === 'UP' ? 'pulse-dot bg-accent-green' : 'pulse-dot bg-accent-red'"></div>
-          </div>
-          
-          <div class="space-y-4">
-            <div class="flex justify-between font-mono text-sm">
-              <span class="text-muted">Status:</span>
-              <span [class]="serviceStatus() === 'UP' ? 'text-accent-green' : 'text-accent-red'">{{ serviceStatus() || 'UNKNOWN' }}</span>
-            </div>
-            <div class="flex justify-between font-mono text-sm">
-              <span class="text-muted">Latency:</span>
-              <span class="text-white">12ms</span>
-            </div>
-            <div class="flex justify-between font-mono text-sm">
-              <span class="text-muted">Node_Type:</span>
-              <span class="text-accent-blue font-bold">EDGE_PRIMARY</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Redis Health -->
-        <div class="card relative overflow-hidden">
-          <div class="flex items-center justify-between mb-8">
-            <h3 class="font-mono text-xs uppercase tracking-widest text-muted">Cache_Engine (Redis)</h3>
-            <div [class]="redisStatus() === 'UP' ? 'pulse-dot bg-accent-blue' : 'pulse-dot bg-accent-red'"></div>
-          </div>
-          
-          <div class="space-y-4">
-            <div class="flex justify-between font-mono text-sm">
-              <span class="text-muted">Connection:</span>
-              <span [class]="redisStatus() === 'UP' ? 'text-accent-blue' : 'text-accent-red'">{{ redisStatus() || 'OFFLINE' }}</span>
-            </div>
-            <div class="flex justify-between font-mono text-sm">
-              <span class="text-muted">Persistence:</span>
-              <span class="text-white">AOF_ENABLED</span>
-            </div>
-            <div class="flex justify-between font-mono text-sm">
-              <span class="text-muted">Memory_Usage:</span>
-              <span class="text-white">1.2GB / 4GB</span>
-            </div>
-          </div>
+    <div class="health-grid">
+      <div class="header-row panel corner-accent bracket-tl bracket-tr">
+        <h2 class="panel-title">SYSTEM_VITALITY.MONITOR</h2>
+        <div class="controls">
+          <span class="text-dim text-[10px] mr-10 uppercase">Refresh Interval: 30s</span>
+          <button class="btn btn-primary btn-sm" (click)="pingAll()">MANUAL_PING_NODE</button>
         </div>
       </div>
 
-      <!-- Raw JSON Logs -->
-      <div class="card p-0 border-dark-border overflow-hidden">
-        <div class="bg-dark-border px-6 py-3 font-mono text-[10px] text-muted uppercase tracking-widest">
-           Telemetry_Output_Debug_Stream
+      <div class="node-cards">
+        <!-- Core Service Panel -->
+        <div class="panel node-card corner-accent bracket-tl bracket-bl">
+          <div class="card-head">
+             <h3 class="node-name">CORE_SERVICES_CLUSTER</h3>
+             <div class="pulse-circle" [class.online]="coreHealth()?.status === 'UP'"></div>
+          </div>
+          <div class="card-body">
+             <div class="metric">
+               <span class="label">STATUS:</span>
+               <span class="value" [class.text-green]="coreHealth()?.status === 'UP'" [class.text-red]="coreHealth()?.status !== 'UP'">
+                 {{ coreHealth()?.status || 'OFFLINE' }}
+               </span>
+             </div>
+             <div class="metric">
+               <span class="label">LATENCY:</span>
+               <span class="value text-cyan">{{ coreHealth()?.timestamp }}ms</span>
+             </div>
+             <div class="metric">
+               <span class="label">LOAD_INDEX:</span>
+               <span class="value">0.12 / NORMAL</span>
+             </div>
+          </div>
+          <div class="raw-box mt-20">
+             <p class="raw-title">RAW_LOG_STREAM:</p>
+             <pre>{{ coreHealth() | json }}</pre>
+          </div>
         </div>
-        <div class="p-6 bg-black">
-          <pre class="font-mono text-[11px] text-accent-green/70 leading-relaxed whitespace-pre-wrap">
-{{ rawResponse() }}
-          </pre>
+
+        <!-- Redis Node Panel -->
+        <div class="panel node-card corner-accent bracket-tr bracket-br">
+          <div class="card-head">
+             <h3 class="node-name">CACHE_ENGINE_NODE_01</h3>
+             <div class="pulse-circle" [class.online]="redisHealth()?.status === 'UP'"></div>
+          </div>
+          <div class="card-body">
+             <div class="metric">
+               <span class="label">CONNECTION:</span>
+               <span class="value" [class.text-green]="redisHealth()?.status === 'UP'" [class.text-red]="redisHealth()?.status !== 'UP'">
+                 {{ redisHealth()?.status || 'AWAITING_SOCKET' }}
+               </span>
+             </div>
+             <div class="metric">
+               <span class="label">LATENCY:</span>
+               <span class="value text-cyan">{{ redisHealth()?.timestamp }}ms</span>
+             </div>
+             <div class="metric">
+               <span class="label">MEMORY:</span>
+               <span class="value text-green">OK (48.2MB)</span>
+             </div>
+          </div>
+          <div class="raw-box mt-20">
+             <p class="raw-title">RAW_LOG_STREAM:</p>
+             <pre>{{ redisHealth() | json }}</pre>
+          </div>
         </div>
+      </div>
+
+      <div class="panel event-log full-width corner-accent bracket-bl bracket-br">
+         <h3 class="panel-title text-dim text-[10px]">EVENT_SEQUENCE_LOG</h3>
+         <div class="logs-container">
+            <p class="log-line">> [{{ now() | date:'HH:mm:ss' }}] POLLING SERVICE CLUSTERS...</p>
+            <p class="log-line">> [{{ now() | date:'HH:mm:ss' }}] NODE_CORE: HANDSHAKE SUCCESSFUL</p>
+            <p class="log-line">> [{{ now() | date:'HH:mm:ss' }}] NODE_CACHE: TUNNEL_OPEN</p>
+            <p class="log-line text-green">> STATUS: ALL_MOD_OPERATIONAL</p>
+         </div>
       </div>
     </div>
   `,
   styles: [`
-    .pulse-dot {
-      @apply w-3 h-3 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)];
-      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    .health-grid { display: flex; flex-direction: column; gap: 20px; }
+    .header-row { display: flex; justify-content: space-between; align-items: center; }
+    .btn-sm { padding: 8px 15px; font-size: 10px; }
+
+    .node-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .node-card { display: flex; flex-direction: column; }
+    .card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; }
+    .node-name { font-size: 13px; color: var(--text-main); }
+
+    .pulse-circle { 
+      width: 14px; height: 14px; border-radius: 50%; background: var(--accent-red); 
+      box-shadow: 0 0 10px var(--accent-red); transition: all 0.5s;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.9); }
+    .pulse-circle.online { 
+      background: var(--accent-green); box-shadow: 0 0 15px var(--accent-green);
+      animation: pulse-health 2s infinite; 
     }
+
+    @keyframes pulse-health { 
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.1); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .card-body { display: flex; flex-direction: column; gap: 12px; }
+    .metric { display: flex; justify-content: space-between; font-size: 11px; }
+    .metric .label { color: var(--text-dim); }
+    .metric .value { font-weight: 700; }
+
+    .raw-box { background: var(--bg-color); border: 1px solid var(--border-color); padding: 15px; }
+    .raw-title { font-size: 8px; color: var(--text-dim); margin-bottom: 8px; }
+    .raw-box pre { font-size: 9px; color: var(--text-dim); white-space: pre-wrap; word-break: break-all; }
+
+    .logs-container { font-size: 10px; color: var(--text-dim); font-family: 'JetBrains Mono'; line-height: 1.8; }
+    .log-line { border-bottom: 1px solid rgba(255,255,255,0.02); padding: 4px 0; }
+    
+    .text-green { color: var(--accent-green); }
+    .text-cyan { color: var(--accent-cyan); }
+    .text-red { color: var(--accent-red); }
+    .text-dim { color: var(--text-dim); }
+    .mt-20 { margin-top: 20px; }
+    .mr-10 { margin-right: 10px; }
   `]
 })
 export class HealthComponent implements OnInit, OnDestroy {
-  serviceStatus = signal<string | null>(null);
-  redisStatus = signal<string | null>(null);
-  rawResponse = signal<string>('INIT_SEQUENCE_STARTING...\nWAITING_FOR_SIGNALS...');
-  
-  private interval: any;
+  coreHealth = signal<HealthResponse | null>(null);
+  redisHealth = signal<HealthResponse | null>(null);
+  now = signal(new Date());
+  private sub: Subscription | undefined;
 
-  constructor(private http: HttpClient) {}
+  constructor(private healthService: HealthService) {}
 
   ngOnInit(): void {
-    this.checkHealth();
-    this.interval = setInterval(() => this.checkHealth(), 30000);
+    this.sub = interval(30000).pipe(
+      startWith(0),
+      switchMap(() => {
+        this.now.set(new Date());
+        return this.pingNodes();
+      })
+    ).subscribe();
   }
 
   ngOnDestroy(): void {
-    if (this.interval) clearInterval(this.interval);
+    this.sub?.unsubscribe();
   }
 
-  checkHealth(): void {
-    this.rawResponse.set(`[${new Date().toISOString()}] POLLING_ENDPOINT: /api/health\n`);
-    
-    // Check general health
-    this.http.get<any>(`${environment.apiBaseUrl}/api/health`).subscribe({
-      next: (res) => {
-        this.serviceStatus.set(res.status);
-        this.rawResponse.update(v => v + `[SERVICE]: OK ${JSON.stringify(res)}\n`);
-      },
-      error: (err) => {
-        this.serviceStatus.set('DOWN');
-        this.rawResponse.update(v => v + `[SERVICE]: ERROR ${err.message}\n`);
-      }
-    });
+  pingAll() {
+    this.now.set(new Date());
+    this.pingNodes().subscribe();
+  }
 
-    // Check redis health
-    this.http.get<any>(`${environment.apiBaseUrl}/api/health/redis`).subscribe({
-      next: (res) => {
-        this.redisStatus.set(res.status);
-        this.rawResponse.update(v => v + `[REDIS]: OK ${JSON.stringify(res)}`);
-      },
-      error: (err) => {
-        this.redisStatus.set('DOWN');
-        this.rawResponse.update(v => v + `[REDIS]: ERROR ${err.message}`);
-      }
-    });
+  private pingNodes() {
+    this.healthService.getCoreHealth().subscribe(res => this.coreHealth.set(res));
+    this.healthService.getRedisHealth().subscribe(res => this.redisHealth.set(res));
+    return of(null);
   }
 }

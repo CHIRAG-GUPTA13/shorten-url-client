@@ -2,26 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-
-export interface BulkShortenJob {
-  id: string;
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-  totalUrls: number;
-  processedUrls: number;
-  successCount: number;
-  failedCount: number;
-  createdAt: string;
-  completedAt?: string;
-}
-
-export interface BulkShortenResult {
-  id: number;
-  longUrl: string;
-  shortCode?: string;
-  shortUrl?: string;
-  success: boolean;
-  errorMessage?: string;
-}
+import { BulkShortenJob, BulkShortenResult } from '../models/models';
 
 @Injectable({
   providedIn: 'root'
@@ -35,10 +16,11 @@ export class BulkShortenService {
   uploadCsv(file: File): Observable<{ jobId: string }> {
     const formData = new FormData();
     formData.append('file', file);
+    // Angular HttpClient automatically sets the boundary for FormData
     return this.http.post<{ jobId: string }>(`${this.apiUrl}/upload`, formData);
   }
 
-  // Submit JSON list
+  // Submit JSON list (raw array)
   submitJson(urls: string[]): Observable<{ jobId: string }> {
     return this.http.post<{ jobId: string }>(`${this.apiUrl}/submit`, urls);
   }

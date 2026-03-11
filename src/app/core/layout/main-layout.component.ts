@@ -1,116 +1,221 @@
-import { Component, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { AuthService } from '../services/auth.service';
-import { animate, style, transition, trigger } from '@angular/animations';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthService } from '../../core/services/auth.service';
+import { interval, Subscription, map } from 'rxjs';
+import { trigger, transition, style, query, animate } from '@angular/animations';
+
+export const slideInAnimation =
+  trigger('routeAnimations', [
+    transition('* <=> *', [
+      style({ position: 'relative' }),
+      query(':enter, :leave', [
+        style({
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          opacity: 0,
+          transform: 'translateY(10px)'
+        })
+      ], { optional: true }),
+      query(':enter', [
+        animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' }))
+      ], { optional: true }),
+    ])
+  ]);
 
 @Component({
   selector: 'app-main-layout',
   standalone: true,
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
-  animations: [
-    trigger('sidebarToggle', [
-      transition(':enter', [
-        style({ transform: 'translateX(-100%)' }),
-        animate('300ms ease-out', style({ transform: 'translateX(0)' }))
-      ])
-    ])
-  ],
+  animations: [slideInAnimation],
   template: `
-    <div class="h-screen flex bg-dark text-white font-sans overflow-hidden">
-      <!-- Background Grid Overlay -->
-      <div class="fixed inset-0 opacity-5 pointer-events-none" 
-           style="background-image: linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px); background-size: 40px 40px;"></div>
-
-      <!-- Sidebar -->
-      <aside class="w-64 border-r border-dark-border flex flex-col z-20 bg-dark relative" @sidebarToggle>
-        <div class="p-8 border-b border-dark-border">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 border border-accent-green flex items-center justify-center font-mono text-accent-green">
-              λ
-            </div>
-            <h1 class="font-mono font-bold tracking-tighter uppercase">Link<span class="text-accent-green font-normal">Core</span></h1>
-          </div>
+    <div class="layout-container">
+      <!-- Top Statusbar -->
+      <header class="status-bar">
+        <div class="status-left">
+          <span class="secure-tag">NETWORK SECURE / PRIMARY CLUSTER</span>
         </div>
-
-        <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
-          <a routerLink="/dashboard" routerLinkActive="active-link" class="nav-item">
-            <span class="mono-num">01.</span> Dashboard
-          </a>
-          <a routerLink="/shorten" routerLinkActive="active-link" class="nav-item text-accent-green">
-             <span class="mono-num">02.</span> Shorten URL
-          </a>
-          <a routerLink="/my-urls" routerLinkActive="active-link" class="nav-item">
-            <span class="mono-num">03.</span> Archives
-          </a>
-          <a routerLink="/analytics" routerLinkActive="active-link" class="nav-item">
-            <span class="mono-num">04.</span> Analytics
-          </a>
-          <a routerLink="/bulk" routerLinkActive="active-link" class="nav-item">
-            <span class="mono-num">05.</span> Bulk Ops
-          </a>
-          <a routerLink="/qr" routerLinkActive="active-link" class="nav-item">
-            <span class="mono-num">06.</span> QR Tools
-          </a>
-          <div class="pt-8 pb-2 px-4 text-[10px] font-mono text-muted uppercase tracking-widest">System</div>
-          <a routerLink="/health" routerLinkActive="active-link" class="nav-item">
-            <span class="mono-num">07.</span> Node Health
-          </a>
-        </nav>
-
-        <div class="p-6 border-t border-dark-border mt-auto">
-          <div class="flex items-center gap-3 mb-6">
-            <div class="w-10 h-10 bg-dark-border border border-muted/20 flex items-center justify-center font-mono text-accent-blue text-xs overflow-hidden">
-               USR
-            </div>
-            <div class="flex-1 overflow-hidden">
-              <div class="text-xs font-mono truncate text-accent-blue">@{{ authService.getUserEmail().split('@')[0] }}</div>
-              <div class="text-[9px] font-mono text-muted uppercase tracking-tight">Level 07 Admin</div>
-            </div>
-          </div>
-          <button (click)="authService.logout()" class="btn btn-secondary w-full text-[10px] uppercase font-bold tracking-widest border-accent-red/20 hover:border-accent-red hover:text-accent-red">
-            Terminate Session
-          </button>
+        <div class="status-right">
+          <span class="time-display">{{ currentTime }} <span class="cursor-blink">▋</span></span>
         </div>
-      </aside>
+      </header>
 
-      <!-- Main Content Area -->
-      <main class="flex-1 flex flex-col min-w-0 relative z-10">
-        <!-- Top Bar -->
-        <header class="h-16 border-b border-dark-border flex items-center justify-between px-8 bg-dark/80 backdrop-blur-md">
-          <div class="flex items-center gap-4">
-             <div class="w-2 h-2 rounded-full bg-accent-green animate-pulse"></div>
-             <div class="font-mono text-[10px] text-muted uppercase tracking-widest">Network Secure / Primary Cluster</div>
+      <div class="main-body">
+        <!-- Sidebar -->
+        <aside class="sidebar corner-accent bracket-tr bracket-br">
+          <div class="brand">
+            <h1 class="glow-text">LINKCORE</h1>
+            <p class="sub-brand">Optimization.v2</p>
           </div>
-          <div class="flex items-center gap-6">
-            <div class="font-mono text-[10px] text-accent-blue">Latency: <span class="text-white">14ms</span></div>
-            <div class="w-px h-4 bg-dark-border"></div>
-            <div class="font-mono text-[10px] text-muted uppercase">03:44:11 UTC</div>
-          </div>
-        </header>
 
-        <!-- Page Content -->
-        <div class="flex-1 overflow-y-auto p-8">
-          <router-outlet></router-outlet>
-        </div>
-      </main>
+          <nav class="nav-links">
+            <a routerLink="/dashboard" routerLinkActive="active-nav" class="nav-item">
+              <span class="nav-num">01.</span> DASHBOARD
+            </a>
+            <a routerLink="/shorten" routerLinkActive="active-nav" class="nav-item">
+              <span class="nav-num">02.</span> SHORTEN URL
+            </a>
+            <a routerLink="/archives" routerLinkActive="active-nav" class="nav-item">
+              <span class="nav-num">03.</span> ARCHIVES
+            </a>
+            <a routerLink="/analytics" routerLinkActive="active-nav" class="nav-item">
+              <span class="nav-num">04.</span> ANALYTICS
+            </a>
+            <a routerLink="/bulk" routerLinkActive="active-nav" class="nav-item">
+              <span class="nav-num">05.</span> BULK OPS
+            </a>
+            <a routerLink="/qr" routerLinkActive="active-nav" class="nav-item">
+              <span class="nav-num">06.</span> QR TOOLS
+            </a>
+            <a routerLink="/health" routerLinkActive="active-nav" class="nav-item">
+              <span class="nav-num">07.</span> NODE HEALTH <span class="pulse-dot bg-green"></span>
+            </a>
+          </nav>
+
+          <div class="user-panel">
+            <div class="user-info">
+              <span class="username">@{{ authService.getUsername() }}</span>
+              <span class="user-level">LEVEL 07 ADMIN</span>
+            </div>
+            <button class="btn logout-btn" (click)="authService.logout()">TERMINATE SESSION</button>
+          </div>
+        </aside>
+
+        <!-- Content Area -->
+        <main class="content-area">
+          <div class="content-wrapper scrollable" [@routeAnimations]="prepareRoute(outlet)">
+             <router-outlet #outlet="outlet"></router-outlet>
+          </div>
+        </main>
+      </div>
     </div>
   `,
   styles: [`
+    .layout-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .status-bar {
+      height: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-darker);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+    }
+
+    .secure-tag { color: var(--accent-cyan); }
+    .time-display { color: #fff; }
+
+    .main-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 260px;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-darker);
+      border-right: 1px solid var(--border-color);
+      padding: 30px 0;
+      z-index: 10;
+    }
+
+    .brand {
+      padding: 0 30px 40px;
+    }
+
+    .glow-text {
+      color: var(--accent-green);
+      font-size: 24px;
+      margin-bottom: 5px;
+      text-shadow: var(--glow-green);
+    }
+
+    .sub-brand { font-size: 9px; color: var(--text-dim); text-transform: uppercase; }
+
+    .nav-links {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
     .nav-item {
-      @apply flex items-center gap-3 px-4 py-3 font-mono text-[12px] uppercase tracking-widest border border-transparent transition-all opacity-60 hover:opacity-100;
+      padding: 15px 30px;
+      display: block;
+      color: var(--text-main);
+      font-size: 12px;
+      position: relative;
+      transition: all 0.3s;
+      border-left: 3px solid transparent;
     }
-    .active-link {
-      @apply border-dark-border bg-dark-lighter opacity-100 text-white shadow-[0_4px_20px_-10px_rgba(0,229,255,0.2)];
+
+    .nav-item:hover {
+      background: rgba(200, 255, 0, 0.05);
+      color: var(--accent-green);
     }
-    .mono-num {
-      @apply text-[10px] text-muted;
+
+    .nav-num { color: var(--text-dim); margin-right: 10px; width: 25px; display: inline-block; }
+
+    .active-nav {
+      background: rgba(0, 242, 255, 0.1);
+      color: var(--accent-cyan) !important;
+      border-left: 3px solid var(--accent-cyan);
     }
-    .active-link .mono-num {
-      @apply text-accent-blue;
+
+    .active-nav .nav-num { color: var(--accent-cyan); opacity: 0.5; }
+
+    .user-panel {
+      padding: 20px;
+      border-top: 1px solid var(--border-color);
     }
+
+    .user-info { display: flex; flex-direction: column; margin-bottom: 15px; }
+    .username { font-weight: 700; color: white; margin-bottom: 4px; }
+    .user-level { font-size: 9px; color: var(--accent-green); opacity: 0.8; }
+
+    .logout-btn { width: 100%; border-color: var(--accent-red); color: var(--accent-red); font-size: 10px; }
+    .logout-btn:hover { background: rgba(255, 62, 62, 0.1); box-shadow: 0 0 10px rgba(255, 62, 62, 0.3); }
+
+    .content-area {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .content-wrapper { height: 100%; padding: 40px; overflow-y: auto; }
+
+    .bg-green { background-color: var(--accent-green); }
   `]
 })
-export class MainLayoutComponent {
+export class MainLayoutComponent implements OnInit, OnDestroy {
+  currentTime = '';
+  private timerSub: Subscription | undefined;
+
   constructor(public authService: AuthService) {}
+
+  ngOnInit(): void {
+    this.timerSub = interval(1000).pipe(
+      map(() => new Date().toISOString().split('T')[1].split('.')[0] + ' UTC')
+    ).subscribe(t => this.currentTime = t);
+  }
+
+  ngOnDestroy(): void {
+    this.timerSub?.unsubscribe();
+  }
+
+  prepareRoute(outlet: RouterOutlet) {
+    return outlet && outlet.activatedRouteData && outlet.activatedRouteData['animation'];
+  }
 }

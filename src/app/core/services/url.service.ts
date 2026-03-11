@@ -1,39 +1,13 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-
-export interface UrlResponse {
-  id: number;
-  shortCode: string;
-  longUrl: string;
-  customSlug?: string;
-  expiresAt?: string;
-  createdAt: string;
-  clickCount: number;
-}
-
-export interface UrlStats {
-  shortCode: string;
-  totalClicks: number;
-  firstClick?: string;
-  lastClick?: string;
-  deviceTypes: { [key: string]: number };
-  browsers: { [key: string]: number };
-  referers: { [key: string]: number };
-}
-
-export interface MyUrlsStats {
-  totalUrls: number;
-  totalClicks: number;
-  urlStats: UrlStats[];
-}
+import { UrlResponse, UrlStats, MyUrlsStatsDto, UrlSummaryStats, UrlFullMetadata } from '../models/models';
 
 export interface UrlShortenRequest {
-  longUrl: string;
-  customSlug?: string;
-  expiresAt?: string;
-  strategy?: 'RANDOM' | 'CUSTOM' | 'USER_PREFERENCE';
+  originalUrl: string;
+  shortCode?: string;
+  expiryDate?: string;
 }
 
 @Injectable({
@@ -42,7 +16,7 @@ export interface UrlShortenRequest {
 export class UrlService {
   private readonly apiUrl = `${environment.apiBaseUrl}/api/urls`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   // Get all URLs for current user
   getMyUrls(): Observable<UrlResponse[]> {
@@ -50,8 +24,8 @@ export class UrlService {
   }
 
   // Get stats for all URLs
-  getMyUrlsStats(): Observable<MyUrlsStats> {
-    return this.http.get<MyUrlsStats>(`${this.apiUrl}/my-urls/stats`);
+  getMyUrlsStats(): Observable<MyUrlsStatsDto[]> {
+    return this.http.get<MyUrlsStatsDto[]>(`${this.apiUrl}/my-urls/stats`);
   }
 
   // Get stats for a specific URL
@@ -60,16 +34,18 @@ export class UrlService {
   }
 
   // Shorten URL (random)
-  shortenUrl(request: UrlShortenRequest): Observable<UrlResponse> {
-    return this.http.post<UrlResponse>(`${this.apiUrl}/shorten`, request);
+  shortenUrl(originalUrl: string, expiryDate?: string): Observable<UrlResponse> {
+    const body: any = { originalUrl };
+    if (expiryDate) body.expiryDate = expiryDate;
+    return this.http.post<UrlResponse>(`${this.apiUrl}/shorten`, body);
   }
 
   // Shorten URL with custom slug
-  shortenUrlCustom(longUrl: string, customSlug: string, expiresAt?: string): Observable<UrlResponse> {
-    const body = {
-      longUrl,
-      customSlug,
-      expiresAt
+  shortenUrlCustom(originalUrl: string, shortCode: string, expiryDate?: string): Observable<UrlResponse> {
+    const body: any = { 
+      originalUrl,
+      shortCode,
+      expiryDate: expiryDate || null
     };
     return this.http.post<UrlResponse>(`${this.apiUrl}/shorten/custom`, body);
   }
@@ -89,5 +65,15 @@ export class UrlService {
   // Get QR code as base64 JSON
   getQrCode(shortCode: string): Observable<{ image: string }> {
     return this.http.get<{ image: string }>(`${this.apiUrl}/${shortCode}/qr`);
+  }
+
+  // Get summary stats for all URLs (new endpoint)
+  getMyUrlsStatsSummary(): Observable<UrlSummaryStats> {
+    return this.http.get<UrlSummaryStats>(`${this.apiUrl}/my-urls/stats/summary`);
+  }
+
+  // Get full metadata for a URL including clickCount and ownerInfo (new endpoint)
+  getUrlFullMetadata(shortCode: string): Observable<UrlFullMetadata> {
+    return this.http.get<UrlFullMetadata>(`${this.apiUrl}/${shortCode}/metadata`);
   }
 }

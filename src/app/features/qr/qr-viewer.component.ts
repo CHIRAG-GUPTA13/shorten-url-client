@@ -1,118 +1,144 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
 import { UrlService } from '../../core/services/url.service';
-import { animate, style, transition, trigger } from '@angular/animations';
 import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-qr-viewer',
   standalone: true,
   imports: [CommonModule],
-  animations: [
-    trigger('popIn', [
-      transition(':enter', [
-        style({ scale: 0.9, opacity: 0 }),
-        animate('300ms cubic-bezier(0.34, 1.56, 0.64, 1)', style({ scale: 1, opacity: 1 }))
-      ])
-    ])
-  ],
   template: `
-    <div class="max-w-2xl mx-auto space-y-10" @popIn>
-      <div class="text-center">
-        <h2 class="text-3xl font-mono font-bold tracking-tighter uppercase">
-          QR.<span class="text-white">Encoder</span>
-        </h2>
-        <p class="text-[10px] font-mono text-muted uppercase tracking-widest mt-1">Visual redirect matrix generation</p>
-      </div>
-
-      <div class="card p-10 flex flex-col items-center gap-8 relative overflow-hidden">
-        <!-- Decoration lines -->
-        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent-blue to-transparent"></div>
+    <div class="qr-container">
+      <div class="panel corner-accent bracket-tl bracket-tr">
+        <h2 class="panel-title">QR_ENCODING.MATRIX</h2>
         
-        <div class="flex bg-dark border border-dark-border p-1 w-full max-w-sm">
-          <input #codeInput type="text" [value]="shortCode()" placeholder="ENTER_CODE" 
-                 class="bg-transparent border-none font-mono text-sm px-4 py-3 focus:outline-none flex-1 uppercase">
-          <button (click)="shortCode.set(codeInput.value)" 
-                  class="bg-dark-border text-white font-mono text-[10px] px-6 uppercase hover:bg-accent-blue hover:text-dark transition-all">
-            LOAD
-          </button>
+        <div class="input-group">
+          <input #codeBox type="text" class="input" placeholder="ENTER_SHORT_CODE (e.g. ab12cd)" (keyup.enter)="loadQR(codeBox.value)">
+          <button class="btn btn-primary" (click)="loadQR(codeBox.value)">ENCODE_MATRIX</button>
         </div>
-
-        @if (shortCode()) {
-          <div class="space-y-8 flex flex-col items-center">
-            <div class="bg-white p-4 border-[12px] border-dark-border shadow-[0_0_50px_-10px_rgba(255,255,255,0.1)]">
-              <img [src]="getQrUrl(shortCode())" alt="QR Code" class="w-64 h-64 grayscale contrast-125">
-            </div>
-
-            <div class="flex gap-4">
-              <button (click)="downloadQr()" class="btn btn-primary px-8 py-3">
-                DOWNLOAD_PNG
-              </button>
-              <button (click)="copyLink()" class="btn btn-secondary px-8 py-3">
-                COPY_LINK
-              </button>
-            </div>
-
-            <div class="font-mono text-[10px] text-muted uppercase tracking-[0.3em] flex items-center gap-4">
-               <span class="w-2 h-2 rounded-full bg-accent-green"></span>
-               Matrix Verified: {{ shortCode() }}
-            </div>
-          </div>
-        } @else {
-          <div class="py-20 text-center opacity-30 font-mono text-[10px] uppercase tracking-[0.5em]">
-             Input short code to resolve matrix
-          </div>
-        }
       </div>
 
-      @if (qrBase64()) {
-        <div class="card p-6 border-dashed">
-          <h3 class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Base64_Payload</h3>
-          <div class="bg-dark p-4 font-mono text-[10px] text-muted truncate select-all">
-            {{ qrBase64() }}
+      @if (currentCode()) {
+        <div class="qr-display mt-20" @fadeUp>
+          <!-- Terminal-style frame -->
+          <div class="qr-frame-outer">
+            <div class="panel qr-frame corner-accent bracket-tl bracket-tr bracket-bl bracket-br">
+              <div class="qr-image-wrapper">
+                 <img [src]="qrBlobUrl()" alt="QR_MATRIX" class="qr-image">
+              </div>
+            </div>
+            
+            <div class="qr-controls">
+              <button class="btn full-width" (click)="downloadQR()">DOWNLOAD_AS.PNG</button>
+              <div class="info-strip mt-10">
+                 <span class="label">MAPPED_URL:</span>
+                 <span class="value text-cyan">{{ getFullUrl() }}</span>
+              </div>
+            </div>
           </div>
+
+          <div class="panel mt-20 details-panel">
+            <details class="monospaced-details">
+              <summary class="text-dim text-[10px] cursor-pointer hover:text-green transition-colors uppercase">
+                 View Raw Base64 Payload
+              </summary>
+              <div class="raw-data-box mt-10">
+                 <pre>{{ rawBase64() || 'AWAITING_BUFFER_READ...' }}</pre>
+              </div>
+            </details>
+          </div>
+        </div>
+        @if (errorMessage()) {
+           <div class="panel error-panel mt-10">
+              <p class="error-text">> CRITICAL_FAILURE: {{ errorMessage() }}</p>
+           </div>
+        }
+      } @else {
+        <div class="panel placeholder-panel mt-20">
+            <p class="text-dim text-center py-40 uppercase tracking-[0.2em] font-mono">
+               No active matrix segment found. <br>
+               Initialize scan to render QR node.
+            </p>
         </div>
       }
     </div>
-  `
+  `,
+  styles: [`
+    .qr-container { max-width: 500px; margin: 0 auto; }
+    .panel-title { font-size: 14px; margin-bottom: 25px; color: var(--accent-green); border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
+
+    .input-group { display: flex; gap: 10px; }
+    .qr-frame-outer { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    
+    .qr-frame { background: white; padding: 20px; border: 1px solid var(--accent-green) !important; width: fit-content; }
+    .qr-image-wrapper { width: 220px; height: 220px; display: flex; align-items: center; justify-content: center; }
+    .qr-image { width: 100%; height: 100%; image-rendering: pixelated; }
+
+    .qr-controls { width: 100%; }
+    .info-strip { display: flex; flex-direction: column; gap: 5px; font-size: 10px; padding: 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color); }
+    .info-strip .label { color: var(--text-dim); }
+    .info-strip .value { word-break: break-all; }
+
+    .details-panel { border-color: var(--border-color); padding: 10px 20px; }
+    .raw-data-box { background: var(--bg-color); padding: 10px; border: 1px solid var(--border-color); overflow-x: auto; }
+    .raw-data-box pre { font-size: 8px; color: var(--text-dim); }
+
+    .full-width { width: 100%; justify-content: center; }
+    .mt-20 { margin-top: 20px; }
+    .mt-10 { margin-top: 10px; }
+    
+    .placeholder-panel { border-style: dashed; opacity: 0.5; }
+    .text-dim { color: var(--text-dim); }
+    .text-cyan { color: var(--accent-cyan); }
+    .text-green { color: var(--accent-green); }
+  `]
 })
-export class QrViewerComponent implements OnInit {
-  shortCode = signal('');
-  qrBase64 = signal<string | null>(null);
+export class QrViewerComponent {
+  currentCode = signal('');
+  qrBlobUrl = signal<string | null>(null);
+  rawBase64 = signal<string | null>(null);
+  errorMessage = signal<string | null>(null);
 
-  constructor(
-    private urlService: UrlService,
-    private route: ActivatedRoute
-  ) {}
+  constructor(private urlService: UrlService) {}
 
-  ngOnInit(): void {
-    const code = this.route.snapshot.paramMap.get('shortCode');
-    if (code) {
-      this.shortCode.set(code);
-      this.loadBase64(code);
-    }
-  }
+  loadQR(code: string) {
+    if (!code) return;
+    this.currentCode.set(code);
+    this.errorMessage.set(null);
 
-  getQrUrl(code: string): string {
-    return `${environment.apiBaseUrl}/api/urls/${code}/qr/image`;
-  }
+    // Fetch Base64 segment
+    this.urlService.getQrCode(code).subscribe({
+      next: (res) => this.rawBase64.set(res.image),
+      error: (err) => {
+         this.rawBase64.set(null);
+         this.errorMessage.set(`[${err.status}] ENCODING_SCAN_FAILED`);
+      }
+    });
 
-  loadBase64(code: string): void {
-    this.urlService.getQrCode(code).subscribe(res => {
-      this.qrBase64.set(res.image);
+    // Fetch Blob for visual rendering
+    this.urlService.getQrCodeImage(code).subscribe({
+      next: (blob) => {
+        if (this.qrBlobUrl()) URL.revokeObjectURL(this.qrBlobUrl()!);
+        const url = URL.createObjectURL(blob);
+        this.qrBlobUrl.set(url);
+      },
+      error: () => this.qrBlobUrl.set(null)
     });
   }
 
-  downloadQr(): void {
-    const link = document.createElement('a');
-    link.href = this.getQrUrl(this.shortCode());
-    link.download = `qr-${this.shortCode()}.png`;
-    link.click();
+  getQrUrl(): string {
+    return `${environment.apiBaseUrl}/api/urls/${this.currentCode()}/qr/image`;
   }
 
-  copyLink(): void {
-    const url = `${environment.apiBaseUrl}/${this.shortCode()}`;
-    navigator.clipboard.writeText(url);
+  getFullUrl(): string {
+    return `${environment.apiBaseUrl}/${this.currentCode()}`;
+  }
+
+  downloadQR() {
+    if (!this.qrBlobUrl()) return;
+    const link = document.createElement('a');
+    link.href = this.qrBlobUrl()!;
+    link.download = `LINKCORE_MATRIX_${this.currentCode()}.png`;
+    link.click();
   }
 }

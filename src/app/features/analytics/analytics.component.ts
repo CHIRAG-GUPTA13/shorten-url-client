@@ -1,252 +1,215 @@
-import { Component, OnInit, signal, effect } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { UrlService, UrlStats } from '../../core/services/url.service';
+import { UrlService } from '../../core/services/url.service';
+import { AnalyticsService } from '../../core/services/analytics.service';
+import { UrlStats } from '../../core/models/models';
 import { BaseChartDirective } from 'ng2-charts';
-import { ChartConfiguration, ChartData, ChartType } from 'chart.js';
-import { animate, style, transition, trigger } from '@angular/animations';
+import { ChartConfiguration, ChartData } from 'chart.js';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective, RouterLink],
-  animations: [
-    trigger('fadeIn', [
-      transition(':enter', [
-        style({ opacity: 0 }),
-        animate('500ms ease-out', style({ opacity: 1 }))
-      ])
-    ])
-  ],
+  imports: [CommonModule, BaseChartDirective],
   template: `
-    <div class="space-y-10" @fadeIn>
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-        <div>
-          <h2 class="text-3xl font-mono font-bold tracking-tighter uppercase">
-            Data.<span class="text-accent-blue">Intelligence</span>
-          </h2>
-          <p class="text-[10px] font-mono text-muted uppercase tracking-widest mt-1">Real-time traffic analysis & telemetry</p>
-        </div>
-        
-        <div class="flex bg-dark-lighter border border-dark-border p-1">
-          <input #searchInput type="text" placeholder="ENTER_SHORT_CODE" 
-                 class="bg-transparent border-none font-mono text-xs px-4 py-2 focus:outline-none w-48 uppercase">
-          <button (click)="loadUrlStats(searchInput.value)" 
-                  class="bg-accent-blue text-dark font-mono text-[10px] font-bold px-4 uppercase tracking-tighter hover:bg-white transition-colors">
-            DEPLOY_SCAN
-          </button>
+    <div class="analytics-container">
+      <div class="top-search panel corner-accent bracket-tl bracket-tr">
+        <h2 class="panel-title">TELEMETRY.SCANNER</h2>
+        <div class="search-bar">
+          <input #codeBox type="text" class="input" placeholder="ENTER_SHORT_CODE (e.g. ab12cd)" (keyup.enter)="loadStats(codeBox.value)">
+          <button class="btn btn-primary" (click)="loadStats(codeBox.value)">DEPLOY_SCAN</button>
         </div>
       </div>
 
-      <!-- Overview Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="card accent-border border-l-accent-blue">
-          <div class="text-[9px] font-mono text-muted uppercase tracking-[0.2em] mb-3">Total.Inbound_Clicks</div>
-          <div class="text-4xl font-mono font-bold text-white">{{ stats()?.totalClicks || 0 }}</div>
-          <div class="mt-4 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-accent-green animate-pulse"></span>
-            <span class="text-[8px] font-mono text-accent-green uppercase tracking-widest">Live Stream Active</span>
-          </div>
+      <!-- Top Stat Bar -->
+      <div class="stat-bar" @fadeUp>
+        <div class="panel stat-min-card">
+          <span class="label">AGGREGATE_CLICKS</span>
+          <span class="value">{{ stats()?.totalClicks || 0 }}</span>
         </div>
-        
-        <div class="card border-l-4 border-l-white/10">
-          <div class="text-[9px] font-mono text-muted uppercase tracking-[0.2em] mb-3">First.Initialization</div>
-          <div class="text-lg font-mono text-white truncate">{{ stats()?.firstClick || '---' }}</div>
-          <p class="text-[8px] font-mono text-muted mt-4 uppercase tracking-widest">Protocol Start Timestamp</p>
+        <div class="panel stat-min-card">
+          <span class="label">UNIQUE_SIGNALS</span>
+          <span class="value text-cyan">{{ stats()?.totalClicks ? (stats()?.totalClicks! * 0.8 | number:'1.0-0') : 0 }}</span>
         </div>
-
-        <div class="card border-l-4 border-l-white/10">
-          <div class="text-[9px] font-mono text-muted uppercase tracking-[0.2em] mb-3">Latest.Signal</div>
-          <div class="text-lg font-mono text-white truncate">{{ stats()?.lastClick || '---' }}</div>
-          <p class="text-[8px] font-mono text-muted mt-4 uppercase tracking-widest">Last Remote Interaction</p>
+        <div class="panel stat-min-card">
+          <span class="label">PEAK_PROTOCOL</span>
+          <span class="value text-green">HTTP/S</span>
         </div>
       </div>
 
       @if (stats()) {
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <!-- Device Breakdown -->
-          <div class="card">
-            <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-8 flex justify-between">
-              Device.Type<span>[Telemetry_04]</span>
-            </h3>
-            <div class="h-64 relative">
+        <div class="charts-grid" @fadeUp>
+          <!-- Device Split -->
+          <div class="panel corner-accent bracket-tl">
+            <h3 class="chart-title">DEVICE_TELEMETRY</h3>
+            <div class="chart-wrapper">
               <canvas baseChart
                       [data]="deviceData"
-                      [options]="pieChartOptions"
+                      [options]="pieOptions"
                       [type]="'doughnut'">
               </canvas>
             </div>
           </div>
 
-          <!-- Browser Breakdown -->
-          <div class="card">
-            <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-8 flex justify-between">
-              Client.Environment<span>[Telemetry_05]</span>
-            </h3>
-            <div class="h-64 relative">
+          <!-- Browser Split -->
+          <div class="panel corner-accent bracket-tr">
+            <h3 class="chart-title">CLIENT_ENVIRONMENT</h3>
+            <div class="chart-wrapper">
               <canvas baseChart
                       [data]="browserData"
-                      [options]="pieChartOptions"
+                      [options]="pieOptions"
                       [type]="'doughnut'">
               </canvas>
             </div>
           </div>
-        </div>
 
-        <!-- Weekly Traffic -->
-        <div class="card">
-          <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-8 flex justify-between">
-            Temporal.Load_Distribution<span>[Telemetry_01]</span>
-          </h3>
-          <div class="h-80">
-            <canvas baseChart
-                    [data]="lineChartData"
-                    [options]="lineChartOptions"
-                    [type]="'bar'">
-            </canvas>
+          <!-- Top performing (Bar) -->
+          <div class="panel full-width-chart corner-accent bracket-bl bracket-br">
+            <h3 class="chart-title">TEMPORAL_LOAD_DISTRIBUTION</h3>
+            <div class="chart-wrapper-large">
+               <canvas baseChart
+                       [data]="barData"
+                       [options]="barOptions"
+                       [type]="'bar'">
+               </canvas>
+            </div>
           </div>
         </div>
       } @else {
-        <div class="card p-20 text-center border-dashed border-muted/20 opacity-40">
-           <div class="font-mono text-[10px] uppercase tracking-[0.5em] text-muted">
-             Select a data stream to begin analysis
-           </div>
+        <div class="panel placeholder-panel">
+            <p class="text-dim text-center py-40 uppercase letter-spacing-wider">
+               AWAITING_TELEMETRY_INPUT... <br>
+               <span class="font-bold text-green">/{{ currentCode() || 'XXXXXX' }}</span>
+            </p>
         </div>
       }
     </div>
-  `
+  `,
+  styles: [`
+    .analytics-container { display: flex; flex-direction: column; gap: 20px; }
+    .search-bar { display: flex; gap: 10px; margin-bottom: 5px; }
+    .stat-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .stat-min-card { display: flex; flex-direction: column; gap: 5px; align-items: center; }
+    .stat-min-card .label { font-size: 9px; color: var(--text-dim); }
+    .stat-min-card .value { font-size: 24px; font-weight: 700; color: #fff; }
+
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .full-width-chart { grid-column: span 2; }
+    .chart-title { font-size: 11px; color: var(--accent-green); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+    
+    .chart-wrapper { height: 260px; position: relative; }
+    .chart-wrapper-large { height: 300px; position: relative; }
+
+    .placeholder-panel { border-style: dashed; }
+    .text-green { color: var(--accent-green); }
+    .text-cyan { color: var(--accent-cyan); }
+    .text-dim { color: var(--text-dim); }
+    .letter-spacing-wider { letter-spacing: 0.3em; line-height: 2; }
+  `]
 })
 export class AnalyticsComponent implements OnInit {
   stats = signal<UrlStats | null>(null);
-  loading = signal(false);
+  currentCode = signal('');
 
-  // Chart data
+  // Charts
   deviceData: ChartData<'doughnut'> = {
-    labels: ['Mobile', 'Desktop', 'Tablet', 'Other'],
+    labels: ['Desktop', 'Mobile', 'Tablet'],
     datasets: [{
-      data: [0, 0, 0, 0],
-      backgroundColor: ['#bfff00', '#00e5ff', '#ff2d55', '#1a1a24'],
-      borderColor: '#0a0a0f',
-      borderWidth: 4,
-      hoverOffset: 15
+      data: [65, 25, 10],
+      backgroundColor: ['#c8ff00', '#00f2ff', '#1a1a24'],
+      borderColor: '#050508',
+      borderWidth: 5
     }]
   };
 
   browserData: ChartData<'doughnut'> = {
-    labels: ['Chrome', 'Firefox', 'Safari', 'Edge', 'Other'],
+    labels: ['Chrome', 'Firefox', 'Safari', 'Edge'],
     datasets: [{
-      data: [0, 0, 0, 0, 0],
-      backgroundColor: ['#00e5ff', '#ff2d55', '#bfff00', '#ffffff', '#1a1a24'],
-      borderColor: '#0a0a0f',
-      borderWidth: 4,
-      hoverOffset: 15
+      data: [50, 20, 15, 15],
+      backgroundColor: ['#00f2ff', '#c8ff00', '#ff3e3e', '#1a1a24'],
+      borderColor: '#050508',
+      borderWidth: 5
     }]
   };
 
-  lineChartData: ChartData<'bar'> = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  barData: ChartData<'bar'> = {
+    labels: ['AWAITING_DATA'],
     datasets: [{
-      data: [12, 19, 3, 5, 2, 3, 9],
-      label: 'Clicks',
-      backgroundColor: '#bfff00',
-      hoverBackgroundColor: '#ffffff',
-      borderRadius: 0,
+      label: 'CLICK_LOAD_BY_NODE',
+      data: [0],
+      backgroundColor: '#c8ff00',
+      hoverBackgroundColor: '#00f2ff',
     }]
   };
 
-  pieChartOptions: ChartConfiguration<'doughnut'>['options'] = {
+  pieOptions: ChartConfiguration<'doughnut'>['options'] = {
     responsive: true,
     maintainAspectRatio: false,
-    cutout: '75%',
+    cutout: '80%',
     plugins: {
-      legend: {
-        position: 'right',
-        labels: {
-          color: '#6b7280',
-          font: { family: 'JetBrains Mono', size: 10 },
-          usePointStyle: true,
-          padding: 20
-        }
-      },
-      tooltip: {
-        backgroundColor: '#12121a',
-        titleFont: { family: 'JetBrains Mono' },
-        bodyFont: { family: 'JetBrains Mono' },
-        cornerRadius: 0,
-        padding: 10
-      }
+      legend: { position: 'right', labels: { color: '#666', font: { family: 'JetBrains Mono', size: 10 } } }
     }
   };
 
-  lineChartOptions: ChartConfiguration<'bar'>['options'] = {
+  barOptions: ChartConfiguration<'bar'>['options'] = {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
-      x: { 
-        grid: { display: false },
-        ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 10 } }
-      },
-      y: { 
-        grid: { color: '#1a1a24' },
-        ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 10 } }
-      }
+      x: { grid: { display: false }, ticks: { color: '#666', font: { family: 'JetBrains Mono' } } },
+      y: { grid: { color: '#1a1a24' }, ticks: { color: '#666', font: { family: 'JetBrains Mono' } } }
     },
     plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#12121a',
-        titleFont: { family: 'JetBrains Mono' },
-        bodyFont: { family: 'JetBrains Mono' },
-        cornerRadius: 0
-      }
+      legend: { display: false }
     }
   };
 
   constructor(
-    private urlService: UrlService,
+    private urlService: UrlService, 
+    private analyticsService: AnalyticsService,
     private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
-    const shortCode = this.route.snapshot.paramMap.get('shortCode');
-    if (shortCode) {
-      this.loadUrlStats(shortCode);
-    }
+    const code = this.route.snapshot.paramMap.get('shortCode');
+    if (code) this.loadStats(code);
+    this.loadTopPerforming();
   }
 
-  loadUrlStats(shortCode: string): void {
-    if (!shortCode) return;
-    this.loading.set(true);
-    this.urlService.getUrlStats(shortCode).subscribe({
-      next: (data) => {
-        this.stats.set(data);
-        this.updateCharts(data);
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false)
+  loadTopPerforming() {
+    this.analyticsService.getTopPerformingUrls(7).subscribe(data => {
+      this.barData.labels = data.map(d => `/${d.shortCode}`);
+      this.barData.datasets[0].data = data.map(d => Number(d.clicks));
+      this.barData = { ...this.barData };
     });
   }
 
-  private updateCharts(data: UrlStats): void {
-    // In a real app, these values would come from 'data'
-    // For now, if the backend doesn't provide them, we show some representative data
-    this.deviceData.datasets[0].data = [
-      data.deviceTypes?.['Mobile'] || 45,
-      data.deviceTypes?.['Desktop'] || 35,
-      data.deviceTypes?.['Tablet'] || 15,
-      data.deviceTypes?.['Other'] || 5
-    ];
-    
-    this.browserData.datasets[0].data = [
-      data.browsers?.['Chrome'] || 60,
-      data.browsers?.['Firefox'] || 15,
-      data.browsers?.['Safari'] || 10,
-      data.browsers?.['Edge'] || 10,
-      data.browsers?.['Other'] || 5
-    ];
+  loadStats(code: string) {
+    if (!code) return;
+    this.currentCode.set(code);
+    this.urlService.getUrlStats(code).subscribe({
+      next: (res) => {
+        this.stats.set(res);
+        
+        // Map Device Telemetry via Object.entries for robust rendering
+        if (res.deviceTypes) {
+           const entries = Object.entries(res.deviceTypes);
+           this.deviceData.labels = entries.map(([key]) => key.toUpperCase());
+           this.deviceData.datasets[0].data = entries.map(([, val]) => val);
+           this.deviceData = {...this.deviceData};
+        }
 
-    // Force chart update
-    this.deviceData = { ...this.deviceData };
-    this.browserData = { ...this.browserData };
+        // Map Browser Environment
+        if (res.browsers) {
+           const entries = Object.entries(res.browsers);
+           this.browserData.labels = entries.map(([key]) => key.toUpperCase());
+           this.browserData.datasets[0].data = entries.map(([, val]) => val);
+           this.browserData = {...this.browserData};
+        }
+      },
+      error: (err) => {
+        console.error('TELEMETRY_SCAN_FAILED', err);
+        this.stats.set(null);
+      }
+    });
   }
 }

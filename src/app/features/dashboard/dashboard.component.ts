@@ -1,171 +1,172 @@
-import { Component, signal } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { UrlService } from '../../core/services/url.service';
-import { animate, style, transition, trigger } from '@angular/animations';
-import { environment } from '../../../environments/environment';
+import { AnalyticsService } from '../../core/services/analytics.service';
+import { HealthService } from '../../core/services/health.service';
+import { UrlResponse, MyUrlsStatsDto } from '../../core/models/models';
+import { forkJoin, map } from 'rxjs';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
-  animations: [
-    trigger('slideUp', [
-      transition(':enter', [
-        style({ transform: 'translateY(20px)', opacity: 0 }),
-        animate('400ms ease-out', style({ transform: 'translateY(0)', opacity: 1 }))
-      ])
-    ])
-  ],
+  imports: [CommonModule],
   template: `
-    <div class="max-w-4xl mx-auto" @slideUp>
-      <div class="mb-12">
-        <h2 class="text-4xl font-mono font-bold tracking-tighter uppercase mb-2">
-          URL<span class="text-accent-green">.Compactor</span>
-        </h2>
-        <div class="flex items-center gap-4">
-           <div class="h-px flex-1 bg-dark-border"></div>
-           <p class="text-[10px] font-mono text-muted uppercase tracking-[0.4em]">Protocol: SHRT-256</p>
-           <div class="h-px flex-1 bg-dark-border"></div>
+    <div class="dashboard-grid">
+      <!-- Stat Cards -->
+      <section class="stats-row">
+        <div class="stat-card panel corner-accent bracket-tl">
+          <span class="stat-label">TOTAL URLS</span>
+          <span class="stat-value">{{ totalUrls() }}</span>
         </div>
-      </div>
+        <div class="stat-card panel corner-accent bracket-tr">
+          <span class="stat-label">TOTAL CLICKS</span>
+          <span class="stat-value text-green">{{ totalClicks() }}</span>
+        </div>
+        <div class="stat-card panel corner-accent bracket-bl">
+          <span class="stat-label">ACTIVE LINKS</span>
+          <span class="stat-value text-cyan">{{ activeLinks() }}</span>
+        </div>
+        <div class="stat-card panel corner-accent bracket-br">
+          <span class="stat-label">EXPIRED LINKS</span>
+          <span class="stat-value text-red">{{ expiredLinks() }}</span>
+        </div>
+      </section>
 
-      <div class="card relative mb-12">
-        <div class="absolute -top-px -left-px w-4 h-4 border-t border-l border-accent-green"></div>
-        <div class="absolute -bottom-px -right-px w-4 h-4 border-b border-r border-accent-green"></div>
-        
-        <form [formGroup]="shortenForm" (ngSubmit)="onSubmit()" class="space-y-8">
-          <div>
-            <label class="block font-mono text-[10px] text-muted uppercase tracking-widest mb-3">Target.Resource_Locator (Long URL)</label>
-            <input type="url" formControlName="longUrl" class="input py-4 text-base" placeholder="https://external-resource.io/path/to/data...">
-            @if (shortenForm.get('longUrl')?.touched && shortenForm.get('longUrl')?.invalid) {
-              <span class="text-accent-red text-[10px] font-mono mt-1 block uppercase">Valid URI Required</span>
-            }
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <label class="block font-mono text-[10px] text-muted uppercase tracking-widest mb-3">Custom.Alias (Optional)</label>
-              <div class="flex">
-                <span class="bg-dark-border border border-r-0 border-dark-border px-3 flex items-center text-muted font-mono text-xs">/</span>
-                <input type="text" formControlName="customSlug" class="input" placeholder="custom-slug">
-              </div>
-            </div>
-            <div>
-              <label class="block font-mono text-[10px] text-muted uppercase tracking-widest mb-3">Expiration.Timestamp (Optional)</label>
-              <input type="datetime-local" formControlName="expiresAt" class="input">
-            </div>
-          </div>
-
-          <div class="pt-4">
-            <button type="submit" class="btn btn-primary w-full py-5 text-base uppercase font-bold tracking-[0.3em]" [disabled]="loading()">
-              @if (loading()) {
-                <span class="animate-pulse">Compacting Stream...</span>
-              } @else {
-                Initialize Compact URL
+      <div class="main-split">
+        <!-- Recent Activity -->
+        <section class="panel corner-accent bracket-tl bracket-bl recent-activity">
+          <h3 class="panel-title">RECENT_ACTIVITY.LOG</h3>
+          <table class="terminal-table">
+            <thead>
+              <tr>
+                <th>CODE</th>
+                <th>TARGET</th>
+                <th>TIMESTAMP</th>
+                <th>CLICKS</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (url of recentUrls(); track url.id) {
+                <tr>
+                  <td class="text-green">{{ url.shortCode }}</td>
+                  <td class="text-dim truncate" style="max-width: 200px;">{{ url.originalUrl }}</td>
+                  <td>{{ url.createdAt | date:'short' }}</td>
+                  <td>{{ url.clickCount }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="4" class="text-center text-dim">NO_RECORD_FOUND</td></tr>
               }
-            </button>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- System Status -->
+        <section class="panel corner-accent bracket-tr bracket-br system-status">
+          <h3 class="panel-title">SYSTEM_STATUS.INF</h3>
+          <div class="status-items">
+            <div class="status-item">
+              <span>CORE SERVICE</span>
+              <span class="status-indicator" [class.bg-green]="coreStatus() === 'UP'" [class.bg-red]="coreStatus() !== 'UP'"></span>
+              <span class="status-text">{{ coreStatus() || 'NODE_OFFLINE' }}</span>
+            </div>
+            <div class="status-item">
+              <span>REDIS CLUSTER</span>
+              <span class="status-indicator" [class.bg-green]="redisStatus() === 'UP'" [class.bg-red]="redisStatus() !== 'UP'"></span>
+              <span class="status-text">{{ redisStatus() || 'NODE_OFFLINE' }}</span>
+            </div>
+            <div class="status-item">
+              <span>LOAD BALANCER</span>
+              <span class="status-indicator bg-green"></span>
+              <span class="status-text">UP</span>
+            </div>
           </div>
-        </form>
+
+          <div class="diagnostic-pre">
+            <p>> KERNEL: 0.4.52-LTS</p>
+            <p>> UPTIME: 104:12:08</p>
+            <p>> CPU: 12.4% / MEM: 48.2MB</p>
+          </div>
+        </section>
       </div>
-
-      @if (result()) {
-        <div class="card accent-border bg-dark-lighter/50 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div class="flex flex-col md:flex-row gap-8 items-start">
-            <div class="flex-1 space-y-6">
-              <div>
-                <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-2">Compact.Result</h3>
-                <div class="flex items-center gap-2">
-                  <div class="flex-1 bg-dark border border-dark-border p-4 font-mono text-accent-green text-lg select-all break-all">
-                    {{ getFullShortUrl(result()?.shortCode) }}
-                  </div>
-                  <button (click)="copyToClipboard()" class="btn btn-secondary h-full py-4 px-6 hover:text-accent-green hover:border-accent-green">
-                    COPY
-                  </button>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-4">
-                <div class="p-4 border border-dark-border">
-                  <div class="text-[9px] font-mono text-muted uppercase mb-1">Status</div>
-                  <div class="text-xs font-mono uppercase text-accent-blue">ACTIVE_NODE</div>
-                </div>
-                <div class="p-4 border border-dark-border">
-                  <div class="text-[9px] font-mono text-muted uppercase mb-1">Short.Code</div>
-                  <div class="text-xs font-mono text-white">{{ result()?.shortCode }}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="w-full md:w-48">
-              <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-4 text-center md:text-left">QR.Module</h3>
-              <div class="bg-white p-2 border-4 border-dark-border aspect-square w-full max-w-[200px] mx-auto md:mx-0">
-                <img [src]="getQrUrl(result()?.shortCode)" alt="QR Code" class="w-full h-full grayscale hover:grayscale-0 transition-all cursor-pointer">
-              </div>
-              <p class="text-[9px] font-mono text-muted mt-3 text-center md:text-left uppercase">Scan to Redirect</p>
-            </div>
-          </div>
-        </div>
-      }
     </div>
-  `
-})
-export class DashboardComponent {
-  shortenForm: FormGroup;
-  loading = signal(false);
-  result = signal<any | null>(null);
-
-  constructor(
-    private fb: FormBuilder,
-    private urlService: UrlService
-  ) {
-    this.shortenForm = this.fb.group({
-      longUrl: ['', [Validators.required, Validators.pattern(/https?:\/\/.+/)]],
-      customSlug: [''],
-      expiresAt: ['']
-    });
-  }
-
-  onSubmit(): void {
-    if (this.shortenForm.invalid) {
-      this.shortenForm.markAllAsTouched();
-      return;
+  `,
+  styles: [`
+    .dashboard-grid { display: flex; flex-direction: column; gap: 30px; }
+    
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
     }
 
-    this.loading.set(true);
-    const formValue = this.shortenForm.value;
+    .stat-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
 
-    const request = {
-      longUrl: formValue.longUrl,
-      customSlug: formValue.customSlug || undefined,
-      expiresAt: formValue.expiresAt || undefined
-    };
+    .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
+    .stat-value { font-size: 32px; font-weight: 700; color: white; }
+    
+    .text-green { color: var(--accent-green); }
+    .text-cyan { color: var(--accent-cyan); }
+    .text-red { color: var(--accent-red); }
+    .text-dim { color: var(--text-dim); }
 
-    this.urlService.shortenUrl(request).subscribe({
-      next: (res) => {
-        this.result.set(res);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.loading.set(false);
-        alert(err.error?.message || 'Compaction failed.');
-      }
+    .main-split {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+
+    .panel-title { font-size: 12px; margin-bottom: 20px; color: var(--accent-green); border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+
+    .status-items { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; }
+    .status-item { display: flex; align-items: center; gap: 12px; font-size: 11px; }
+    .status-indicator { width: 8px; height: 8px; border-radius: 50%; }
+    .status-text { color: var(--text-dim); margin-left: auto; }
+
+    .diagnostic-pre { font-size: 9px; color: var(--text-dim); line-height: 2; border-top: 1px solid var(--border-color); padding-top: 15px; }
+
+    .bg-red { background-color: var(--accent-red); box-shadow: 0 0 8px var(--accent-red); }
+    .bg-green { background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+  `]
+})
+export class DashboardComponent implements OnInit {
+  totalUrls = signal(0);
+  totalClicks = signal(0);
+  activeLinks = signal(0);
+  expiredLinks = signal(0);
+  recentUrls = signal<UrlResponse[]>([]);
+  coreStatus = signal<string | null>(null);
+  redisStatus = signal<string | null>(null);
+
+  constructor(
+    private urlService: UrlService,
+    private analyticsService: AnalyticsService,
+    private healthService: HealthService
+  ) {}
+
+  ngOnInit(): void {
+    this.loadDashboardData();
+  }
+
+  loadDashboardData(): void {
+    // 1. Fetch summary stats for cards
+    this.analyticsService.getSummaryStats().subscribe(stats => {
+      this.totalUrls.set(stats.totalUrls);
+      this.totalClicks.set(stats.totalClicks);
+      this.activeLinks.set(stats.activeLinks);
+      this.expiredLinks.set(stats.expiredLinks);
     });
-  }
 
-  getFullShortUrl(code: string | undefined): string {
-    if (!code) return '';
-    return `${environment.apiBaseUrl}/${code}`;
-  }
+    // 2. Fetch recent URLs for the table
+    this.urlService.getMyUrls().subscribe(urls => {
+      this.recentUrls.set(urls.slice(0, 5));
+    });
 
-  getQrUrl(code: string | undefined): string {
-    if (!code) return '';
-    return `${environment.apiBaseUrl}/api/urls/${code}/qr/image`;
-  }
-
-  copyToClipboard(): void {
-    const url = this.getFullShortUrl(this.result()?.shortCode);
-    navigator.clipboard.writeText(url);
-    // Could add a toast here
+    // 2. System Status
+    this.healthService.getCoreHealth().subscribe(res => this.coreStatus.set(res.status));
+    this.healthService.getRedisHealth().subscribe(res => this.redisStatus.set(res.status));
   }
 }

@@ -1,174 +1,228 @@
-import { Component, signal } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { BulkShortenService, BulkShortenJob } from '../../core/services/bulk-shorten.service';
-import { animate, style, transition, trigger } from '@angular/animations';
+import { BulkShortenService } from '../../core/services/bulk-shorten.service';
+import { BulkShortenJob, BulkShortenResult } from '../../core/models/models';
+import { animate, style, transition, trigger, state } from '@angular/animations';
 
 @Component({
-  selector: 'app-bulk-shorten',
+  selector: 'app-bulk',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule],
   animations: [
-    trigger('slideIn', [
-      transition(':enter', [
-        style({ transform: 'translateX(20px)', opacity: 0 }),
-        animate('400ms ease-out', style({ transform: 'translateX(0)', opacity: 1 }))
-      ])
+    trigger('fold', [
+      state('collapsed', style({ height: '0px', padding: '0px' })),
+      state('expanded', style({ height: '*', padding: '20px' })),
+      transition('expanded <=> collapsed', animate('300ms ease-out'))
     ])
   ],
   template: `
-    <div class="space-y-10" @slideIn>
-      <div>
-        <h2 class="text-3xl font-mono font-bold tracking-tighter uppercase">
-          Mass.<span class="text-accent-red">Compression</span>
-        </h2>
-        <p class="text-[10px] font-mono text-muted uppercase tracking-widest mt-1">Bulk URL processing engine</p>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        <!-- Input Section -->
-        <div class="lg:col-span-3 space-y-6">
-          <div class="card relative">
-            <div class="flex border-b border-dark-border mb-8">
-              <button (click)="mode.set('json')" 
-                      [class.border-accent-red]="mode() === 'json'"
-                      [class.text-white]="mode() === 'json'"
-                      class="px-6 py-4 font-mono text-[10px] uppercase tracking-widest border-b-2 border-transparent transition-all">
-                JSON_BLOCK
-              </button>
-              <button (click)="mode.set('csv')" 
-                      [class.border-accent-red]="mode() === 'csv'"
-                      [class.text-white]="mode() === 'csv'"
-                      class="px-6 py-4 font-mono text-[10px] uppercase tracking-widest border-b-2 border-transparent transition-all">
-                CSV_STREAM
-              </button>
-            </div>
-
-            @if (mode() === 'json') {
-              <div class="space-y-4">
-                <label class="block font-mono text-[9px] text-muted uppercase tracking-widest mb-2">Input_Array [URL, URL, ...]</label>
-                <textarea #jsonInput class="input min-h-[200px] border-accent-red/20 focus:border-accent-red" 
-                          placeholder="['https://url1.com', 'https://url2.com']"></textarea>
-                <button (click)="submitJson(jsonInput.value)" [disabled]="loading()"
-                        class="btn btn-outline-green w-full py-4 border-accent-red text-accent-red hover:bg-accent-red hover:text-white uppercase font-bold tracking-[0.2em]">
-                  GENERATE_MASS_LINKS
-                </button>
-              </div>
-            } @else {
-              <div class="space-y-4">
-                <label class="block font-mono text-[9px] text-muted uppercase tracking-widest mb-2">Source_File (.csv)</label>
-                <div class="flex flex-col items-center justify-center border-2 border-dashed border-dark-border p-12 hover:border-accent-red/50 transition-colors cursor-pointer relative">
-                  <input type="file" (change)="onFileSelected($event)" class="absolute inset-0 opacity-0 cursor-pointer">
-                  <div class="text-[10px] font-mono text-muted uppercase tracking-widest text-center">
-                    {{ selectedFile() ? selectedFile()?.name : 'Drop telemetry source or click to browse' }}
-                  </div>
-                </div>
-                <button (click)="submitCsv()" [disabled]="!selectedFile() || loading()"
-                        class="btn btn-outline-green w-full py-4 border-accent-red text-accent-red hover:bg-accent-red hover:text-white uppercase font-bold tracking-[0.2em]">
-                  UPLOAD_AND_PROCESS
-                </button>
-              </div>
-            }
-          </div>
+    <div class="bulk-container">
+      <div class="panel corner-accent bracket-tl bracket-tr">
+        <h2 class="panel-title">MASS_COMPRESSION.PROCESSOR</h2>
+        
+        <div class="tabs">
+          <button class="tab-btn" [class.active]="mode() === 'json'" (click)="mode.set('json')">01. JSON_BLOB</button>
+          <button class="tab-btn" [class.active]="mode() === 'csv'" (click)="mode.set('csv')">02. CSV_STREAM</button>
         </div>
 
-        <!-- History/Status Sidebar -->
-        <div class="lg:col-span-2 space-y-4">
-          <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-4">Job.Registry</h3>
-          <div class="space-y-3">
-            @for (job of jobs(); track job.id) {
-              <div class="card p-4 hover:border-accent-blue/30 transition-colors cursor-pointer group" (click)="viewResults(job.id)">
-                <div class="flex justify-between items-start mb-2">
-                  <div class="font-mono text-[10px] text-accent-blue truncate">ID: {{ job.id }}</div>
-                  <span class="px-2 py-0.5 bg-dark border border-dark-border font-mono text-[8px] uppercase"
-                        [class.text-accent-green]="job.status === 'COMPLETED'"
-                        [class.text-accent-blue]="job.status === 'PROCESSING'"
-                        [class.text-muted]="job.status === 'PENDING'">
-                    {{ job.status }}
-                  </span>
-                </div>
-                <div class="flex justify-between items-end mt-4">
-                  <div class="font-mono text-[9px] text-muted uppercase">{{ job.createdAt | date:'short' }}</div>
-                  <div class="font-mono text-[12px] text-white opacity-50 group-hover:opacity-100 transition-opacity">
-                    {{ job.processedUrls }}/{{ job.totalUrls }}
-                  </div>
-                </div>
-                <div class="mt-3 h-1 w-full bg-dark overflow-hidden">
-                   <div class="h-full bg-accent-blue transition-all duration-1000" 
-                        [style.width.%]="(job.processedUrls / job.totalUrls) * 100"></div>
-                </div>
+        <div class="tab-content">
+          @if (mode() === 'json') {
+            <div class="json-input">
+              <label class="text-dim text-[10px] mb-2 block uppercase">Input URL array (monospaced):</label>
+              <textarea #jsonInput class="input terminal-textarea" 
+                        placeholder='["https://...", "https://..."]'></textarea>
+              <button class="btn btn-primary full-width mt-10" (click)="submitJson(jsonInput.value)" [disabled]="loading()">
+                {{ loading() ? 'UPLOAD_ACTIVE...' : 'INITIALIZE_SEQUENTIAL_COMPRESSION' }}
+              </button>
+            </div>
+          } @else {
+            <div class="csv-input" 
+                 (dragover)="$event.preventDefault()" 
+                 (drop)="onFileDrop($event)"
+                 (click)="fileInput.click()">
+              <input #fileInput type="file" (change)="onFileSelected($event)" hidden>
+              <div class="drop-zone border-dashed">
+                <p class="text-green font-bold">{{ selectedFile() ? selectedFile()?.name : 'DROP TELEMETRY DATA OR CLICK TO BROWSE' }}</p>
+                <p class="text-dim text-[9px] mt-2 uppercase">Protocol: CSV-8BIT / Buffer: 50MB MAX</p>
               </div>
-            } @empty {
-              <div class="text-center p-8 border border-dark-border text-[9px] font-mono text-muted uppercase tracking-widest opacity-50">
-                No active jobs in registry
-              </div>
-            }
+              <button class="btn btn-primary full-width mt-10" (click)="submitCsv()" [disabled]="!selectedFile() || loading()">
+                {{ loading() ? 'INJECTING_PAYLOAD...' : 'INJECT_TELEMETRY_STREAM' }}
+              </button>
+            </div>
+          }
+        </div>
+
+        @if (errorMessage()) {
+          <div class="panel error-panel mt-10">
+             <p class="error-text">> CRITICAL_FAILURE: {{ errorMessage() }}</p>
           </div>
+        }
+      </div>
+
+      <!-- Jobs List -->
+      <div class="jobs-registry mt-30">
+        <h3 class="panel-title text-cyan">JOB_REGISTRY.X-LOG</h3>
+        <div class="job-list">
+          @for (job of jobs(); track job.id) {
+            <div class="job-card panel mb-10" [class.active-job]="activeJob() === job.id">
+              <div class="job-header" (click)="toggleJob(job.id)">
+                <span class="text-dim">ID: {{ job.id.slice(0,8) }}...</span>
+                <span class="badge" [class.badge-active]="job.status === 'COMPLETED'" 
+                                    [class.badge-exp]="job.status === 'PROCESSING'">
+                  {{ job.status }}
+                </span>
+                <span class="text-cyan ml-auto">{{ job.processedUrls }}/{{ job.totalUrls }} PKTS</span>
+                <span class="expand-icon">{{ activeJob() === job.id ? '▼' : '▶' }}</span>
+              </div>
+
+              <div class="job-results" [@fold]="activeJob() === job.id ? 'expanded' : 'collapsed'">
+                 <table class="terminal-table result-min">
+                   <thead>
+                     <tr>
+                       <th>STATUS</th>
+                       <th>SOURCE_DATA</th>
+                       <th>RESULT</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     @for (res of jobResults()[job.id] || []; track res.id) {
+                       <tr>
+                         <td [class.text-green]="res.success" [class.text-red]="!res.success">
+                           {{ res.success ? 'OK' : 'ERR' }}
+                         </td>
+                         <td class="text-dim truncate" style="max-width: 200px;">{{ res.longUrl }}</td>
+                         <td class="text-cyan">{{ res.shortCode ? '/' + res.shortCode : '--' }}</td>
+                       </tr>
+                     } @empty {
+                       <tr><td colspan="3" class="text-center text-dim text-[9px]">AWAITING_RESULT_BUFFER...</td></tr>
+                     }
+                   </tbody>
+                 </table>
+              </div>
+            </div>
+          } @empty {
+            <div class="panel text-center py-20 text-dim">NO_ACTIVE_PROCESS_HANDLES</div>
+          }
         </div>
       </div>
     </div>
-  `
+  `,
+  styles: [`
+    .bulk-container { display: flex; flex-direction: column; }
+    .panel-title { font-size: 14px; margin-bottom: 25px; color: var(--accent-green); border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
+    
+    .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 30px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-dim); padding: 10px 20px; font-family: inherit; font-size: 11px; cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab-btn.active { color: #fff; border-bottom-color: var(--accent-green); }
+
+    .terminal-textarea { min-height: 150px; resize: vertical; margin-bottom: 10px; font-size: 12px; }
+    
+    .drop-zone { border: 1px dashed var(--border-color); padding: 60px 40px; text-align: center; cursor: pointer; transition: 0.2s; }
+    .drop-zone:hover { border-color: var(--accent-green); background: rgba(200, 255, 0, 0.05); }
+
+    .full-width { width: 100%; justify-content: center; }
+    .mt-10 { margin-top: 10px; }
+    .mt-30 { margin-top: 30px; }
+    .ml-auto { margin-left: auto; }
+
+    .job-header { display: flex; align-items: center; gap: 15px; padding: 15px; cursor: pointer; font-size: 11px; }
+    .job-header:hover { background: rgba(0, 242, 255, 0.05); }
+    .active-job { border-color: var(--accent-cyan); }
+    
+    .badge-active { border-color: var(--accent-green); color: var(--accent-green); }
+    .badge-exp { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+    .job-results { background: var(--bg-color); border-top: 1px solid var(--border-color); overflow: hidden; }
+    .result-min th { font-size: 8px; padding: 5px; }
+    .result-min td { font-size: 10px; padding: 8px 5px; }
+
+    .text-cyan { color: var(--accent-cyan); }
+    .text-red { color: var(--accent-red); }
+    .text-green { color: var(--accent-green); }
+    .text-dim { color: var(--text-dim); }
+  `]
 })
-export class BulkShortenComponent {
+export class BulkShortenComponent implements OnInit {
   mode = signal<'json' | 'csv'>('json');
   jobs = signal<BulkShortenJob[]>([]);
+  activeJob = signal<string | null>(null);
+  jobResults = signal<{ [key: string]: BulkShortenResult[] }>({});
   loading = signal(false);
   selectedFile = signal<File | null>(null);
+  errorMessage = signal<string | null>(null);
 
-  constructor(private bulkService: BulkShortenService) {
+  constructor(private bulkService: BulkShortenService) {}
+
+  ngOnInit(): void {
     this.loadJobs();
   }
 
-  loadJobs(): void {
-    this.bulkService.getAllJobs().subscribe((jobs: BulkShortenJob[]) => this.jobs.set(jobs));
+  loadJobs() {
+    this.bulkService.getAllJobs().subscribe(jobs => this.jobs.set(jobs));
   }
 
-  onFileSelected(event: any): void {
+  toggleJob(jobId: string) {
+    if (this.activeJob() === jobId) {
+      this.activeJob.set(null);
+    } else {
+      this.activeJob.set(jobId);
+      if (!this.jobResults()[jobId]) {
+        this.bulkService.getJobResults(jobId).subscribe(res => {
+          const results = { ...this.jobResults() };
+          results[jobId] = res;
+          this.jobResults.set(results);
+        });
+      }
+    }
+  }
+
+  onFileSelected(event: any) {
     const file = event.target.files[0];
     if (file) this.selectedFile.set(file);
   }
 
-  submitJson(input: string): void {
+  onFileDrop(event: DragEvent) {
+    event.preventDefault();
+    const file = event.dataTransfer?.files[0];
+    if (file) this.selectedFile.set(file);
+  }
+
+  submitJson(val: string) {
     try {
-      const urls = JSON.parse(input.replace(/'/g, '"'));
-      if (!Array.isArray(urls)) throw new Error();
-      
+      this.errorMessage.set(null);
+      const urls = JSON.parse(val.replace(/'/g, '"'));
+      if (!Array.isArray(urls)) throw new Error('NOT_ARRAY');
       this.loading.set(true);
       this.bulkService.submitJson(urls).subscribe({
         next: () => {
           this.loading.set(false);
           this.loadJobs();
         },
-        error: (err: any) => {
+        error: (err) => {
           this.loading.set(false);
-          alert(err.error?.message || 'Mass.Compression failed.');
+          this.errorMessage.set(`[${err.status}] ${err.error?.message || 'IO_STREAM_ERROR'}`);
         }
       });
-    } catch {
-      alert('Invalid JSON array format.');
+    } catch (e) {
+      this.errorMessage.set('INVALID_JSON_STREAM_FORMAT');
     }
   }
 
-  submitCsv(): void {
+  submitCsv() {
     const file = this.selectedFile();
     if (!file) return;
-
     this.loading.set(true);
+    this.errorMessage.set(null);
     this.bulkService.uploadCsv(file).subscribe({
       next: () => {
         this.loading.set(false);
         this.selectedFile.set(null);
         this.loadJobs();
       },
-      error: () => this.loading.set(false)
-    });
-  }
-
-  viewResults(jobId: string): void {
-    // This could open a modal or navigate to a results page
-    this.bulkService.getJobResults(jobId).subscribe(results => {
-       console.log('Job Results:', results);
-       alert(`Job ${jobId} results ready in console.`);
+      error: (err) => {
+        this.loading.set(false);
+        this.errorMessage.set(`[${err.status}] ${err.error?.message || 'CSV_UPLOAD_FAILED'}`);
+      }
     });
   }
 }

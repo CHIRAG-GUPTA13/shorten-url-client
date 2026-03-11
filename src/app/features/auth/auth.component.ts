@@ -1,144 +1,132 @@
 import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
+import { Observable } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { animate, style, transition, trigger } from '@angular/animations';
 
 @Component({
   selector: 'app-auth',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule],
   animations: [
     trigger('fadeSlide', [
       transition(':enter', [
         style({ opacity: 0, transform: 'translateY(10px)' }),
-        animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' }))
+        animate('400ms ease-out', style({ opacity: 1, transform: 'translateY(0)' }))
       ])
     ])
   ],
   template: `
-    <div class="min-h-screen bg-dark flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <!-- Background Grid -->
-      <div class="fixed inset-0 opacity-10 pointer-events-none" 
-           style="background-image: radial-gradient(#1a1a24 1px, transparent 1px); background-size: 32px 32px;"></div>
-      
-      <div class="w-full max-w-md z-10" @fadeSlide>
-        <!-- Logo/Header -->
-        <div class="mb-12 flex items-center gap-4">
-          <div class="w-12 h-12 border-2 border-accent-green flex items-center justify-center font-mono font-bold text-2xl text-accent-green">
-            λ
-          </div>
-          <div>
-            <h1 class="text-3xl font-mono font-bold tracking-tighter uppercase whitespace-nowrap">
-              Link<span class="text-accent-green">Core</span>
-            </h1>
-            <p class="text-muted text-xs font-mono uppercase tracking-widest">URL Optimization Protocol</p>
-          </div>
+    <div class="auth-screen">
+      <div class="auth-container" @fadeSlide>
+        <!-- Logo Area -->
+        <div class="auth-brand">
+          <h1 class="glow-text">LINKCORE</h1>
+          <p class="sub-brand">SECURITY.ACCESS_PROTOCOL.v2</p>
         </div>
 
-        <div class="card relative overflow-hidden">
-          <!-- Accent top border -->
-          <div class="absolute top-0 left-0 right-0 h-1 bg-accent-green"></div>
-          
-          <div class="flex border-b border-dark-border mb-8">
-            <button (click)="mode.set('login')" 
-                    [class.border-accent-green]="mode() === 'login'"
-                    [class.text-accent-green]="mode() === 'login'"
-                    class="flex-1 py-4 font-mono text-sm uppercase tracking-widest border-b-2 border-transparent transition-all">
-              Access
-            </button>
-            <button (click)="mode.set('register')" 
-                    [class.border-accent-green]="mode() === 'register'"
-                    [class.text-accent-green]="mode() === 'register'"
-                    class="flex-1 py-4 font-mono text-sm uppercase tracking-widest border-b-2 border-transparent transition-all">
-              Initialize
-            </button>
+        <div class="panel corner-accent bracket-tl bracket-tr bracket-bl bracket-br">
+          <div class="tabs">
+            <button class="tab-btn" [class.active]="mode() === 'login'" (click)="mode.set('login')">01. ACCESS</button>
+            <button class="tab-btn" [class.active]="mode() === 'register'" (click)="mode.set('register')">02. INITIALIZE</button>
           </div>
 
-          @if (error()) {
-            <div class="bg-accent-red/10 border border-accent-red text-accent-red p-3 font-mono text-xs mb-6 uppercase">
-              [Error]: {{ error() }}
-            </div>
-          }
-
-          <form [formGroup]="authForm" (ngSubmit)="onSubmit()" class="space-y-6">
-            <div>
-              <label class="block font-mono text-xs text-muted uppercase tracking-widest mb-2">System.Identifier (Email)</label>
+          <form [formGroup]="authForm" (ngSubmit)="onSubmit()" class="terminal-form">
+            <div class="form-group">
+              <label>SYSTEM_IDENTIFIER (EMAIL)</label>
               <input type="email" formControlName="email" class="input" placeholder="user@nexus.io">
-              @if (authForm.get('email')?.touched && authForm.get('email')?.invalid) {
-                <span class="text-accent-red text-[10px] font-mono mt-1 block uppercase">Entry format invalid</span>
-              }
             </div>
 
-            <div>
-              <label class="block font-mono text-xs text-muted uppercase tracking-widest mb-2">Access.Protocol (Password)</label>
+            @if (mode() === 'register') {
+              <div class="form-group" @fadeSlide>
+                <label>USER_ALIAS (USERNAME)</label>
+                <input type="text" formControlName="username" class="input" placeholder="nexus_user">
+              </div>
+            }
+
+            <div class="form-group">
+              <label>SECURITY_STRING (PASSWORD)</label>
               <input type="password" formControlName="password" class="input" placeholder="••••••••">
-              @if (authForm.get('password')?.touched && authForm.get('password')?.invalid) {
-                <span class="text-accent-red text-[10px] font-mono mt-1 block uppercase">Security string required</span>
-              }
             </div>
 
-            <button type="submit" class="btn btn-primary w-full py-4 uppercase font-bold tracking-[0.2em]" [disabled]="loading()">
-              @if (loading()) {
-                <span class="animate-pulse">Authorizing...</span>
-              } @else {
-                {{ mode() === 'login' ? 'Execute Access' : 'Register Identity' }}
-              }
+            <button type="submit" class="btn btn-primary full-width mt-10" [disabled]="loading()">
+              {{ loading() ? 'AUTHORIZING...' : (mode() === 'login' ? 'EXECUTE_LOGIN' : 'REGISTER_IDENTITY') }}
             </button>
           </form>
 
-          <div class="mt-8 pt-8 border-t border-dark-border flex justify-between items-center text-[10px] font-mono text-muted uppercase tracking-widest">
-            <span>Security Status: 0x01</span>
-            <span>v2.0.4-LTS</span>
-          </div>
+          @if (errorMessage()) {
+             <p class="error-text mt-20">> CRITICAL_FAILURE: {{ errorMessage() }}</p>
+          }
         </div>
-        
-        <p class="text-center mt-8 font-mono text-[10px] text-muted opacity-50 uppercase tracking-[0.3em]">
-          Restricted access. All sessions are logged.
-        </p>
+
+        <div class="auth-footer">
+          <p>> ENCRYPTION: AES-256-GCM</p>
+          <p>> ALL SESSIONS ARE MONITORED</p>
+        </div>
       </div>
     </div>
-  `
+  `,
+  styles: [`
+    .auth-screen { 
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; 
+      background: var(--bg-color); position: relative;
+    }
+    .auth-container { width: 400px; display: flex; flex-direction: column; gap: 30px; z-index: 10; }
+    
+    .auth-brand { text-align: center; }
+    .glow-text { color: var(--accent-green); font-size: 32px; letter-spacing: 0.2em; text-shadow: var(--glow-green); }
+    .sub-brand { font-size: 10px; color: var(--text-dim); margin-top: 5px; }
+
+    .tabs { display: flex; margin-bottom: 30px; border-bottom: 1px solid var(--border-color); }
+    .tab-btn { flex: 1; background: transparent; border: none; color: var(--text-dim); padding: 15px; font-family: inherit; font-size: 11px; cursor: pointer; transition: 0.2s; }
+    .tab-btn.active { color: var(--accent-green); border-bottom: 2px solid var(--accent-green); }
+
+    .terminal-form { display: flex; flex-direction: column; gap: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-group label { font-size: 9px; color: var(--text-dim); }
+
+    .full-width { width: 100%; justify-content: center; padding: 15px; }
+    .mt-10 { margin-top: 10px; }
+    .mt-20 { margin-top: 20px; }
+
+    .auth-footer { font-size: 9px; color: var(--text-dim); text-align: center; display: flex; flex-direction: column; gap: 5px; opacity: 0.5; }
+    .error-text { text-align: center; }
+  `]
 })
 export class AuthComponent {
   mode = signal<'login' | 'register'>('login');
   authForm: FormGroup;
   loading = signal(false);
-  error = signal<string | null>(null);
+  errorMessage = signal<string | null>(null);
 
-  constructor(
-    private fb: FormBuilder,
-    private authService: AuthService,
-    private router: Router
-  ) {
+  constructor(private fb: FormBuilder, private authService: AuthService, private router: Router) {
     this.authForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
+      username: [''],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
   }
 
-  onSubmit(): void {
-    if (this.authForm.invalid) {
-      this.authForm.markAllAsTouched();
-      return;
-    }
-
+  onSubmit() {
+    if (this.authForm.invalid) return;
     this.loading.set(true);
-    this.error.set(null);
+    this.errorMessage.set(null);
 
-    const request = this.authForm.value;
-    const authObs = this.mode() === 'login' 
-      ? this.authService.login(request)
-      : this.authService.register(request);
+    const val = this.authForm.value;
+    const obs$: Observable<any> = this.mode() === 'login' 
+      ? this.authService.login({ email: val.email, password: val.password })
+      : this.authService.register(val);
 
-    authObs.subscribe({
+    obs$.subscribe({
       next: () => {
-        this.router.navigate(['/shorten']);
+        this.loading.set(false);
+        this.router.navigate(['/dashboard']);
       },
       error: (err: any) => {
-        this.error.set(err.error?.message || 'Authentication sequence failed.');
         this.loading.set(false);
+        this.errorMessage.set(`[${err.status || 401}] ${err.error?.message || 'AUTHORIZATION_DENIED'}`);
       }
     });
   }
