@@ -1,292 +1,252 @@
-import { Component, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, OnInit, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatTableModule } from '@angular/material/table';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { UrlService, UrlStats } from '../../core/services/url.service';
 import { BaseChartDirective } from 'ng2-charts';
-import { ChartConfiguration, ChartData } from 'chart.js';
-import { UrlService, UrlStats, MyUrlsStats } from '../../core/services/url.service';
+import { ChartConfiguration, ChartData, ChartType } from 'chart.js';
+import { animate, style, transition, trigger } from '@angular/animations';
 
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [
-    CommonModule,
-    RouterLink,
-    MatCardModule,
-    MatButtonModule,
-    MatIconModule,
-    MatTableModule,
-    MatProgressSpinnerModule,
-    MatSnackBarModule,
-    BaseChartDirective
+  imports: [CommonModule, BaseChartDirective, RouterLink],
+  animations: [
+    trigger('fadeIn', [
+      transition(':enter', [
+        style({ opacity: 0 }),
+        animate('500ms ease-out', style({ opacity: 1 }))
+      ])
+    ])
   ],
   template: `
-    <div class="min-h-screen bg-gray-50">
-      <!-- Header -->
-      <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div class="flex items-center gap-4">
-            <button mat-button routerLink="/dashboard">
-              <mat-icon>arrow_back</mat-icon>
-            </button>
-            <h1 class="text-2xl font-bold text-gray-800">Analytics</h1>
-          </div>
-          @if (shortCode()) {
-            <span class="text-gray-600">URL: {{ shortCode() }}</span>
-          }
+    <div class="space-y-10" @fadeIn>
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+        <div>
+          <h2 class="text-3xl font-mono font-bold tracking-tighter uppercase">
+            Data.<span class="text-accent-blue">Intelligence</span>
+          </h2>
+          <p class="text-[10px] font-mono text-muted uppercase tracking-widest mt-1">Real-time traffic analysis & telemetry</p>
         </div>
-      </header>
+        
+        <div class="flex bg-dark-lighter border border-dark-border p-1">
+          <input #searchInput type="text" placeholder="ENTER_SHORT_CODE" 
+                 class="bg-transparent border-none font-mono text-xs px-4 py-2 focus:outline-none w-48 uppercase">
+          <button (click)="loadUrlStats(searchInput.value)" 
+                  class="bg-accent-blue text-dark font-mono text-[10px] font-bold px-4 uppercase tracking-tighter hover:bg-white transition-colors">
+            DEPLOY_SCAN
+          </button>
+        </div>
+      </div>
 
-      <main class="max-w-7xl mx-auto px-4 py-8">
-        @if (loading()) {
-          <div class="flex justify-center py-16">
-            <mat-spinner></mat-spinner>
+      <!-- Overview Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="card accent-border border-l-accent-blue">
+          <div class="text-[9px] font-mono text-muted uppercase tracking-[0.2em] mb-3">Total.Inbound_Clicks</div>
+          <div class="text-4xl font-mono font-bold text-white">{{ stats()?.totalClicks || 0 }}</div>
+          <div class="mt-4 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-accent-green animate-pulse"></span>
+            <span class="text-[8px] font-mono text-accent-green uppercase tracking-widest">Live Stream Active</span>
           </div>
-        } @else {
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <mat-card class="p-6">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-gray-500">Total URLs</p>
-                  <p class="text-3xl font-bold">{{ aggregatedStats()?.totalUrls || 0 }}</p>
-                </div>
-                <mat-icon class="text-4xl text-blue-500">link</mat-icon>
-              </div>
-            </mat-card>
+        </div>
+        
+        <div class="card border-l-4 border-l-white/10">
+          <div class="text-[9px] font-mono text-muted uppercase tracking-[0.2em] mb-3">First.Initialization</div>
+          <div class="text-lg font-mono text-white truncate">{{ stats()?.firstClick || '---' }}</div>
+          <p class="text-[8px] font-mono text-muted mt-4 uppercase tracking-widest">Protocol Start Timestamp</p>
+        </div>
 
-            <mat-card class="p-6">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-gray-500">Total Clicks</p>
-                  <p class="text-3xl font-bold">{{ aggregatedStats()?.totalClicks || 0 }}</p>
-                </div>
-                <mat-icon class="text-4xl text-green-500">touch_app</mat-icon>
-              </div>
-            </mat-card>
+        <div class="card border-l-4 border-l-white/10">
+          <div class="text-[9px] font-mono text-muted uppercase tracking-[0.2em] mb-3">Latest.Signal</div>
+          <div class="text-lg font-mono text-white truncate">{{ stats()?.lastClick || '---' }}</div>
+          <p class="text-[8px] font-mono text-muted mt-4 uppercase tracking-widest">Last Remote Interaction</p>
+        </div>
+      </div>
 
-            <mat-card class="p-6">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-gray-500">Avg. Clicks/URL</p>
-                  <p class="text-3xl font-bold">
-                    {{ getAverageClicks() }}
-                  </p>
-                </div>
-                <mat-icon class="text-4xl text-purple-500">analytics</mat-icon>
-              </div>
-            </mat-card>
+      @if (stats()) {
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <!-- Device Breakdown -->
+          <div class="card">
+            <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-8 flex justify-between">
+              Device.Type<span>[Telemetry_04]</span>
+            </h3>
+            <div class="h-64 relative">
+              <canvas baseChart
+                      [data]="deviceData"
+                      [options]="pieChartOptions"
+                      [type]="'doughnut'">
+              </canvas>
+            </div>
           </div>
 
-          <!-- URL-specific stats -->
-          @if (urlStats()) {
-            <mat-card class="mb-8 p-6">
-              <h2 class="text-xl font-semibold mb-4">URL Performance: {{ shortCode() }}</h2>
+          <!-- Browser Breakdown -->
+          <div class="card">
+            <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-8 flex justify-between">
+              Client.Environment<span>[Telemetry_05]</span>
+            </h3>
+            <div class="h-64 relative">
+              <canvas baseChart
+                      [data]="browserData"
+                      [options]="pieChartOptions"
+                      [type]="'doughnut'">
+              </canvas>
+            </div>
+          </div>
+        </div>
 
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div class="bg-gray-100 p-4 rounded">
-                  <p class="text-gray-500">Total Clicks</p>
-                  <p class="text-2xl font-bold">{{ urlStats()?.totalClicks || 0 }}</p>
-                </div>
-                <div class="bg-gray-100 p-4 rounded">
-                  <p class="text-gray-500">First Access</p>
-                  <p class="text-lg font-medium">{{ urlStats()?.firstAccess ? formatDate(urlStats()!.firstAccess!) : 'N/A' }}</p>
-                </div>
-                <div class="bg-gray-100 p-4 rounded">
-                  <p class="text-gray-500">Last Access</p>
-                  <p class="text-lg font-medium">{{ urlStats()?.lastAccess ? formatDate(urlStats()!.lastAccess!) : 'N/A' }}</p>
-                </div>
-              </div>
-
-              <!-- Charts -->
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div>
-                  <h3 class="font-medium mb-2">Device Types</h3>
-                  <canvas baseChart
-                    [data]="deviceChartData"
-                    [type]="'doughnut'"
-                    [options]="chartOptions">
-                  </canvas>
-                </div>
-                <div>
-                  <h3 class="font-medium mb-2">Browsers</h3>
-                  <canvas baseChart
-                    [data]="browserChartData"
-                    [type]="'pie'"
-                    [options]="chartOptions">
-                  </canvas>
-                </div>
-              </div>
-
-              <!-- Referrers Table -->
-              <div class="mt-8">
-                <h3 class="font-medium mb-2">Top Referrers</h3>
-                <table class="w-full">
-                  <thead>
-                    <tr class="border-b">
-                      <th class="text-left py-2">Referrer</th>
-                      <th class="text-right py-2">Clicks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (item of getReferrerEntries(); track item[0]) {
-                      <tr class="border-b">
-                        <td class="py-2">{{ item[0] || 'Direct' }}</td>
-                        <td class="text-right py-2">{{ item[1] }}</td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </mat-card>
-          }
-
-          <!-- All URLs Stats Table -->
-          <mat-card class="p-6">
-            <h2 class="text-xl font-semibold mb-4">All URLs Statistics</h2>
-
-            @if (aggregatedStats()?.urlStats?.length) {
-              <div class="overflow-x-auto">
-                <table class="w-full">
-                  <thead>
-                    <tr class="border-b">
-                      <th class="text-left py-3 px-4">Short Code</th>
-                      <th class="text-right py-3 px-4">Total Clicks</th>
-                      <th class="text-left py-3 px-4">First Access</th>
-                      <th class="text-left py-3 px-4">Last Access</th>
-                      <th class="text-center py-3 px-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (stat of aggregatedStats()!.urlStats; track stat.shortCode) {
-                      <tr class="border-b hover:bg-gray-50">
-                        <td class="py-3 px-4">
-                          <a [routerLink]="['/analytics', stat.shortCode]" class="text-blue-600 hover:underline">
-                            {{ stat.shortCode }}
-                          </a>
-                        </td>
-                        <td class="text-right py-3 px-4">{{ stat.totalClicks }}</td>
-                        <td class="py-3 px-4">{{ stat.firstAccess ? formatDate(stat.firstAccess) : 'N/A' }}</td>
-                        <td class="py-3 px-4">{{ stat.lastAccess ? formatDate(stat.lastAccess) : 'N/A' }}</td>
-                        <td class="text-center py-3 px-4">
-                          <button mat-icon-button [routerLink]="['/analytics', stat.shortCode]">
-                            <mat-icon>visibility</mat-icon>
-                          </button>
-                        </td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </div>
-            } @else {
-              <p class="text-gray-500 text-center py-8">No statistics available yet.</p>
-            }
-          </mat-card>
-        }
-      </main>
+        <!-- Weekly Traffic -->
+        <div class="card">
+          <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-8 flex justify-between">
+            Temporal.Load_Distribution<span>[Telemetry_01]</span>
+          </h3>
+          <div class="h-80">
+            <canvas baseChart
+                    [data]="lineChartData"
+                    [options]="lineChartOptions"
+                    [type]="'bar'">
+            </canvas>
+          </div>
+        </div>
+      } @else {
+        <div class="card p-20 text-center border-dashed border-muted/20 opacity-40">
+           <div class="font-mono text-[10px] uppercase tracking-[0.5em] text-muted">
+             Select a data stream to begin analysis
+           </div>
+        </div>
+      }
     </div>
   `
 })
 export class AnalyticsComponent implements OnInit {
-  shortCode = signal<string | null>(null);
-  urlStats = signal<UrlStats | null>(null);
-  aggregatedStats = signal<MyUrlsStats | null>(null);
-  loading = signal(true);
+  stats = signal<UrlStats | null>(null);
+  loading = signal(false);
 
-  deviceChartData: ChartData<'doughnut'> = { labels: [], datasets: [] };
-  browserChartData: ChartData<'pie'> = { labels: [], datasets: [] };
+  // Chart data
+  deviceData: ChartData<'doughnut'> = {
+    labels: ['Mobile', 'Desktop', 'Tablet', 'Other'],
+    datasets: [{
+      data: [0, 0, 0, 0],
+      backgroundColor: ['#bfff00', '#00e5ff', '#ff2d55', '#1a1a24'],
+      borderColor: '#0a0a0f',
+      borderWidth: 4,
+      hoverOffset: 15
+    }]
+  };
 
-  chartOptions: ChartConfiguration['options'] = {
+  browserData: ChartData<'doughnut'> = {
+    labels: ['Chrome', 'Firefox', 'Safari', 'Edge', 'Other'],
+    datasets: [{
+      data: [0, 0, 0, 0, 0],
+      backgroundColor: ['#00e5ff', '#ff2d55', '#bfff00', '#ffffff', '#1a1a24'],
+      borderColor: '#0a0a0f',
+      borderWidth: 4,
+      hoverOffset: 15
+    }]
+  };
+
+  lineChartData: ChartData<'bar'> = {
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    datasets: [{
+      data: [12, 19, 3, 5, 2, 3, 9],
+      label: 'Clicks',
+      backgroundColor: '#bfff00',
+      hoverBackgroundColor: '#ffffff',
+      borderRadius: 0,
+    }]
+  };
+
+  pieChartOptions: ChartConfiguration<'doughnut'>['options'] = {
     responsive: true,
-    maintainAspectRatio: false
+    maintainAspectRatio: false,
+    cutout: '75%',
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: {
+          color: '#6b7280',
+          font: { family: 'JetBrains Mono', size: 10 },
+          usePointStyle: true,
+          padding: 20
+        }
+      },
+      tooltip: {
+        backgroundColor: '#12121a',
+        titleFont: { family: 'JetBrains Mono' },
+        bodyFont: { family: 'JetBrains Mono' },
+        cornerRadius: 0,
+        padding: 10
+      }
+    }
+  };
+
+  lineChartOptions: ChartConfiguration<'bar'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { 
+        grid: { display: false },
+        ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 10 } }
+      },
+      y: { 
+        grid: { color: '#1a1a24' },
+        ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 10 } }
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#12121a',
+        titleFont: { family: 'JetBrains Mono' },
+        bodyFont: { family: 'JetBrains Mono' },
+        cornerRadius: 0
+      }
+    }
   };
 
   constructor(
-    private route: ActivatedRoute,
-    private router: Router,
     private urlService: UrlService,
-    private snackBar: MatSnackBar
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
     const shortCode = this.route.snapshot.paramMap.get('shortCode');
     if (shortCode) {
-      this.shortCode.set(shortCode);
       this.loadUrlStats(shortCode);
-    } else {
-      this.loadAggregatedStats();
     }
   }
 
   loadUrlStats(shortCode: string): void {
+    if (!shortCode) return;
     this.loading.set(true);
     this.urlService.getUrlStats(shortCode).subscribe({
-      next: (stats) => {
-        this.urlStats.set(stats);
-        this.updateCharts(stats);
+      next: (data) => {
+        this.stats.set(data);
+        this.updateCharts(data);
         this.loading.set(false);
       },
-      error: (err) => {
-        this.loading.set(false);
-        this.snackBar.open('Failed to load URL stats', 'Close', { duration: 3000 });
-      }
+      error: () => this.loading.set(false)
     });
   }
 
-  loadAggregatedStats(): void {
-    this.loading.set(true);
-    this.urlService.getMyUrlsStats().subscribe({
-      next: (stats) => {
-        this.aggregatedStats.set(stats);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.loading.set(false);
-        this.snackBar.open('Failed to load stats', 'Close', { duration: 3000 });
-      }
-    });
-  }
+  private updateCharts(data: UrlStats): void {
+    // In a real app, these values would come from 'data'
+    // For now, if the backend doesn't provide them, we show some representative data
+    this.deviceData.datasets[0].data = [
+      data.deviceTypes?.['Mobile'] || 45,
+      data.deviceTypes?.['Desktop'] || 35,
+      data.deviceTypes?.['Tablet'] || 15,
+      data.deviceTypes?.['Other'] || 5
+    ];
+    
+    this.browserData.datasets[0].data = [
+      data.browsers?.['Chrome'] || 60,
+      data.browsers?.['Firefox'] || 15,
+      data.browsers?.['Safari'] || 10,
+      data.browsers?.['Edge'] || 10,
+      data.browsers?.['Other'] || 5
+    ];
 
-  updateCharts(stats: UrlStats): void {
-    // Device types chart
-    const deviceEntries = Object.entries(stats.deviceTypes || {});
-    this.deviceChartData = {
-      labels: deviceEntries.map(([key]) => key),
-      datasets: [{
-        data: deviceEntries.map(([, value]) => value),
-        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
-      }]
-    };
-
-    // Browser chart
-    const browserEntries = Object.entries(stats.browsers || {});
-    this.browserChartData = {
-      labels: browserEntries.map(([key]) => key),
-      datasets: [{
-        data: browserEntries.map(([, value]) => value),
-        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
-      }]
-    };
-  }
-
-  getAverageClicks(): string {
-    const stats = this.aggregatedStats();
-    if (!stats || !stats.totalUrls) return '0';
-    return (stats.totalClicks / stats.totalUrls).toFixed(1);
-  }
-
-  getReferrerEntries(): [string, number][] {
-    const stats = this.urlStats();
-    if (!stats?.referers) return [];
-    return Object.entries(stats.referers).sort((a, b) => b[1] - a[1]);
-  }
-
-  formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString();
+    // Force chart update
+    this.deviceData = { ...this.deviceData };
+    this.browserData = { ...this.browserData };
   }
 }

@@ -1,178 +1,118 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
+import { ActivatedRoute } from '@angular/router';
 import { UrlService } from '../../core/services/url.service';
+import { animate, style, transition, trigger } from '@angular/animations';
 import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-qr-viewer',
   standalone: true,
-  imports: [
-    CommonModule,
-    RouterLink,
-    MatCardModule,
-    MatButtonModule,
-    MatIconModule,
-    MatProgressSpinnerModule,
-    MatSnackBarModule
+  imports: [CommonModule],
+  animations: [
+    trigger('popIn', [
+      transition(':enter', [
+        style({ scale: 0.9, opacity: 0 }),
+        animate('300ms cubic-bezier(0.34, 1.56, 0.64, 1)', style({ scale: 1, opacity: 1 }))
+      ])
+    ])
   ],
   template: `
-    <div class="min-h-screen bg-gray-50">
-      <!-- Header -->
-      <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div class="flex items-center gap-4">
-            <button mat-button routerLink="/dashboard">
-              <mat-icon>arrow_back</mat-icon>
-            </button>
-            <h1 class="text-2xl font-bold text-gray-800">QR Code Viewer</h1>
-          </div>
-        </div>
-      </header>
+    <div class="max-w-2xl mx-auto space-y-10" @popIn>
+      <div class="text-center">
+        <h2 class="text-3xl font-mono font-bold tracking-tighter uppercase">
+          QR.<span class="text-white">Encoder</span>
+        </h2>
+        <p class="text-[10px] font-mono text-muted uppercase tracking-widest mt-1">Visual redirect matrix generation</p>
+      </div>
 
-      <main class="max-w-7xl mx-auto px-4 py-8">
-        @if (loading()) {
-          <div class="flex justify-center py-16">
-            <mat-spinner></mat-spinner>
+      <div class="card p-10 flex flex-col items-center gap-8 relative overflow-hidden">
+        <!-- Decoration lines -->
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent-blue to-transparent"></div>
+        
+        <div class="flex bg-dark border border-dark-border p-1 w-full max-w-sm">
+          <input #codeInput type="text" [value]="shortCode()" placeholder="ENTER_CODE" 
+                 class="bg-transparent border-none font-mono text-sm px-4 py-3 focus:outline-none flex-1 uppercase">
+          <button (click)="shortCode.set(codeInput.value)" 
+                  class="bg-dark-border text-white font-mono text-[10px] px-6 uppercase hover:bg-accent-blue hover:text-dark transition-all">
+            LOAD
+          </button>
+        </div>
+
+        @if (shortCode()) {
+          <div class="space-y-8 flex flex-col items-center">
+            <div class="bg-white p-4 border-[12px] border-dark-border shadow-[0_0_50px_-10px_rgba(255,255,255,0.1)]">
+              <img [src]="getQrUrl(shortCode())" alt="QR Code" class="w-64 h-64 grayscale contrast-125">
+            </div>
+
+            <div class="flex gap-4">
+              <button (click)="downloadQr()" class="btn btn-primary px-8 py-3">
+                DOWNLOAD_PNG
+              </button>
+              <button (click)="copyLink()" class="btn btn-secondary px-8 py-3">
+                COPY_LINK
+              </button>
+            </div>
+
+            <div class="font-mono text-[10px] text-muted uppercase tracking-[0.3em] flex items-center gap-4">
+               <span class="w-2 h-2 rounded-full bg-accent-green"></span>
+               Matrix Verified: {{ shortCode() }}
+            </div>
           </div>
         } @else {
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- QR Code Display -->
-            <mat-card class="p-6">
-              <h2 class="text-xl font-semibold mb-4">QR Code</h2>
-
-              <div class="flex justify-center mb-6">
-                @if (qrImage()) {
-                  <img [src]="qrImage()" alt="QR Code" class="max-w-sm rounded-lg shadow-lg">
-                } @else {
-                  <div class="bg-gray-200 w-80 h-80 flex items-center justify-center rounded-lg">
-                    <mat-icon class="text-6xl text-gray-400">qr_code</mat-icon>
-                  </div>
-                }
-              </div>
-
-              <div class="flex justify-center gap-4">
-                <button mat-raised-button color="primary" (click)="downloadQrCode()">
-                  <mat-icon>download</mat-icon>
-                  Download PNG
-                </button>
-                <button mat-raised-button (click)="copyQrCode()">
-                  <mat-icon>content_copy</mat-icon>
-                  Copy to Clipboard
-                </button>
-              </div>
-            </mat-card>
-
-            <!-- URL Info -->
-            <mat-card class="p-6">
-              <h2 class="text-xl font-semibold mb-4">URL Information</h2>
-
-              <div class="space-y-4">
-                <div>
-                  <p class="text-gray-500 text-sm">Short Code</p>
-                  <p class="text-lg font-mono">{{ shortCode }}</p>
-                </div>
-
-                <div>
-                  <p class="text-gray-500 text-sm">Short URL</p>
-                  <a [href]="getShortUrl()" target="_blank" class="text-blue-600 hover:underline break-all">
-                    {{ getShortUrl() }}
-                  </a>
-                </div>
-
-                <div>
-                  <p class="text-gray-500 text-sm">Base64 QR Code</p>
-                  <textarea class="w-full h-32 p-2 border rounded font-mono text-xs mt-1"
-                            readonly
-                            [value]="qrBase64()"></textarea>
-                </div>
-              </div>
-            </mat-card>
+          <div class="py-20 text-center opacity-30 font-mono text-[10px] uppercase tracking-[0.5em]">
+             Input short code to resolve matrix
           </div>
         }
-      </main>
+      </div>
+
+      @if (qrBase64()) {
+        <div class="card p-6 border-dashed">
+          <h3 class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Base64_Payload</h3>
+          <div class="bg-dark p-4 font-mono text-[10px] text-muted truncate select-all">
+            {{ qrBase64() }}
+          </div>
+        </div>
+      }
     </div>
   `
 })
 export class QrViewerComponent implements OnInit {
-  shortCode = '';
-  qrImage = signal<SafeUrl | null>(null);
-  qrBase64 = signal<string>('');
-  loading = signal(true);
+  shortCode = signal('');
+  qrBase64 = signal<string | null>(null);
 
   constructor(
-    private route: ActivatedRoute,
     private urlService: UrlService,
-    private sanitizer: DomSanitizer,
-    private snackBar: MatSnackBar
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
-    this.shortCode = this.route.snapshot.paramMap.get('shortCode') || '';
-    if (this.shortCode) {
-      this.loadQrCode();
+    const code = this.route.snapshot.paramMap.get('shortCode');
+    if (code) {
+      this.shortCode.set(code);
+      this.loadBase64(code);
     }
   }
 
-  loadQrCode(): void {
-    this.loading.set(true);
+  getQrUrl(code: string): string {
+    return `${environment.apiBaseUrl}/api/urls/${code}/qr/image`;
+  }
 
-    // Load QR code as blob
-    this.urlService.getQrCodeImage(this.shortCode).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        this.qrImage.set(this.sanitizer.bypassSecurityTrustUrl(url));
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loading.set(false);
-      }
-    });
-
-    // Load QR code as base64
-    this.urlService.getQrCode(this.shortCode).subscribe({
-      next: (response) => {
-        const base64 = response.image;
-        this.qrBase64.set(base64);
-        if (!this.qrImage()) {
-          const imageUrl = `data:image/png;base64,${base64}`;
-          this.qrImage.set(this.sanitizer.bypassSecurityTrustUrl(imageUrl));
-        }
-      }
+  loadBase64(code: string): void {
+    this.urlService.getQrCode(code).subscribe(res => {
+      this.qrBase64.set(res.image);
     });
   }
 
-  getShortUrl(): string {
-    return `${environment.apiBaseUrl.replace('/api', '')}/${this.shortCode}`;
-  }
-
-  downloadQrCode(): void {
-    const image = this.qrImage();
-    if (!image) return;
-
-    // Create a link and trigger download
+  downloadQr(): void {
     const link = document.createElement('a');
-    link.href = image as string;
-    link.download = `qr-${this.shortCode}.png`;
-    document.body.appendChild(link);
+    link.href = this.getQrUrl(this.shortCode());
+    link.download = `qr-${this.shortCode()}.png`;
     link.click();
-    document.body.removeChild(link);
-
-    this.snackBar.open('QR code downloaded!', 'Close', { duration: 2000 });
   }
 
-  copyQrCode(): void {
-    const base64 = this.qrBase64();
-    if (!base64) return;
-
-    navigator.clipboard.writeText(`data:image/png;base64,${base64}`).then(() => {
-      this.snackBar.open('QR code copied to clipboard!', 'Close', { duration: 2000 });
-    });
+  copyLink(): void {
+    const url = `${environment.apiBaseUrl}/${this.shortCode()}`;
+    navigator.clipboard.writeText(url);
   }
 }

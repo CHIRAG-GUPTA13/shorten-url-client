@@ -11,7 +11,7 @@ export const authGuard: CanActivateFn = (route, state) => {
   }
 
   // Redirect to login page with return URL
-  router.navigate(['/auth/login'], {
+  router.navigate(['/auth'], {
     queryParams: { returnUrl: state.url }
   });
   return false;
@@ -26,6 +26,6 @@ export const guestGuard: CanActivateFn = (route, state) => {
   }
 
   // Redirect to dashboard if already authenticated
-  router.navigate(['/dashboard']);
+  router.navigate(['/shorten']);
   return false;
 };

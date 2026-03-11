@@ -1,28 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html, body {
-  height: 100%;
-  margin: 0;
-  font-family: Roboto, "Helvetica Neue", sans-serif;
+@layer base {
+  html {
+    @apply bg-dark text-white selection:bg-accent-green selection:text-dark;
+  }
+  
+  body {
+    @apply font-sans antialiased bg-dark overflow-x-hidden;
+    background-image: url('https://grainy-gradients.vercel.app/noise.svg');
+    background-repeat: repeat;
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-mono tracking-tight;
+  }
+
+  pre, code {
+    @apply font-mono;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 font-mono text-sm border transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  
+  .btn-primary {
+    @apply bg-accent-green text-dark border-accent-green hover:bg-transparent hover:text-accent-green;
+  }
+  
+  .btn-secondary {
+    @apply bg-transparent text-white border-dark-border hover:border-white;
+  }
+
+  .btn-outline-green {
+    @apply bg-transparent text-accent-green border-accent-green hover:bg-accent-green hover:text-dark;
+  }
+
+  .input {
+    @apply w-full bg-dark-lighter border border-dark-border px-4 py-2 font-mono text-sm focus:outline-none focus:border-accent-blue transition-colors;
+  }
+
+  .card {
+    @apply bg-dark-lighter border border-dark-border p-6 rounded-none;
+  }
+
+  .accent-border {
+    @apply border-l-4 border-l-accent-green;
+  }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  @apply bg-dark;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  @apply bg-dark-border rounded-full hover:bg-muted transition-colors;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
+/* Recharts customization */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #1a1a24;
+}
+
+.recharts-text {
+  fill: #6b7280 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px;
 }

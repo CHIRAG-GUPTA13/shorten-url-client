@@ -40,7 +40,7 @@ export class BulkShortenService {
 
   // Submit JSON list
   submitJson(urls: string[]): Observable<{ jobId: string }> {
-    return this.http.post<{ jobId: string }>(`${this.apiUrl}/submit`, { urls });
+    return this.http.post<{ jobId: string }>(`${this.apiUrl}/submit`, urls);
   }
 
   // Get job status

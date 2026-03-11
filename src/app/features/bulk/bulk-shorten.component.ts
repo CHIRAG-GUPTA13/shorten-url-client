@@ -1,366 +1,174 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatTableModule } from '@angular/material/table';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatTabsModule } from '@angular/material/tabs';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { BulkShortenService, BulkShortenJob, BulkShortenResult } from '../../core/services/bulk-shorten.service';
+import { BulkShortenService, BulkShortenJob } from '../../core/services/bulk-shorten.service';
+import { animate, style, transition, trigger } from '@angular/animations';
 
 @Component({
   selector: 'app-bulk-shorten',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    RouterLink,
-    ReactiveFormsModule,
-    MatCardModule,
-    MatButtonModule,
-    MatIconModule,
-    MatTableModule,
-    MatProgressSpinnerModule,
-    MatSnackBarModule,
-    MatTabsModule,
-    MatProgressBarModule
+  imports: [CommonModule, ReactiveFormsModule],
+  animations: [
+    trigger('slideIn', [
+      transition(':enter', [
+        style({ transform: 'translateX(20px)', opacity: 0 }),
+        animate('400ms ease-out', style({ transform: 'translateX(0)', opacity: 1 }))
+      ])
+    ])
   ],
   template: `
-    <div class="min-h-screen bg-gray-50">
-      <!-- Header -->
-      <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div class="flex items-center gap-4">
-            <button mat-button routerLink="/dashboard">
-              <mat-icon>arrow_back</mat-icon>
-            </button>
-            <h1 class="text-2xl font-bold text-gray-800">Bulk URL Shortener</h1>
-          </div>
-        </div>
-      </header>
+    <div class="space-y-10" @slideIn>
+      <div>
+        <h2 class="text-3xl font-mono font-bold tracking-tighter uppercase">
+          Mass.<span class="text-accent-red">Compression</span>
+        </h2>
+        <p class="text-[10px] font-mono text-muted uppercase tracking-widest mt-1">Bulk URL processing engine</p>
+      </div>
 
-      <main class="max-w-7xl mx-auto px-4 py-8">
-        <mat-tab-group>
-          <!-- CSV Upload Tab -->
-          <mat-tab label="CSV Upload">
-            <div class="p-6">
-              <mat-card class="p-6">
-                <h2 class="text-xl font-semibold mb-4">Upload CSV File</h2>
-                <p class="text-gray-600 mb-4">
-                  Upload a CSV file with one URL per line. The file should contain a single column with the long URLs.
-                </p>
-
-                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-4"
-                     (dragover)="onDragOver($event)"
-                     (drop)="onDrop($event)"
-                     [class.border-blue-500]="isDragging()">
-                  <input type="file" #fileInput (change)="onFileSelected($event)" accept=".csv" class="hidden" id="fileInput">
-                  <label for="fileInput" class="cursor-pointer">
-                    <mat-icon class="text-4xl text-gray-400">cloud_upload</mat-icon>
-                    <p class="mt-2 text-gray-600">
-                      @if (selectedFile()) {
-                        {{ selectedFile()?.name }}
-                      } @else {
-                        Drag and drop a CSV file here, or click to select
-                      }
-                    </p>
-                  </label>
-                </div>
-
-                <button mat-raised-button color="primary"
-                        [disabled]="!selectedFile() || uploading()"
-                        (click)="uploadCsv()">
-                  @if (uploading()) {
-                    <mat-spinner diameter="20"></mat-spinner>
-                  } @else {
-                    Upload and Process
-                  }
-                </button>
-              </mat-card>
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <!-- Input Section -->
+        <div class="lg:col-span-3 space-y-6">
+          <div class="card relative">
+            <div class="flex border-b border-dark-border mb-8">
+              <button (click)="mode.set('json')" 
+                      [class.border-accent-red]="mode() === 'json'"
+                      [class.text-white]="mode() === 'json'"
+                      class="px-6 py-4 font-mono text-[10px] uppercase tracking-widest border-b-2 border-transparent transition-all">
+                JSON_BLOCK
+              </button>
+              <button (click)="mode.set('csv')" 
+                      [class.border-accent-red]="mode() === 'csv'"
+                      [class.text-white]="mode() === 'csv'"
+                      class="px-6 py-4 font-mono text-[10px] uppercase tracking-widest border-b-2 border-transparent transition-all">
+                CSV_STREAM
+              </button>
             </div>
-          </mat-tab>
 
-          <!-- JSON Input Tab -->
-          <mat-tab label="JSON Input">
-            <div class="p-6">
-              <mat-card class="p-6">
-                <h2 class="text-xl font-semibold mb-4">Enter URLs (JSON)</h2>
-                <p class="text-gray-600 mb-4">
-                  Enter a JSON array of URLs to shorten.
-                </p>
-
-                <textarea class="w-full h-64 p-4 border rounded-lg font-mono text-sm"
-                          [(ngModel)]="jsonInput"
-                          placeholder='["https://example.com/page1", "https://example.com/page2"]'></textarea>
-
-                <button mat-raised-button color="primary"
-                        class="mt-4"
-                        [disabled]="!jsonInput || submittingJson()"
-                        (click)="submitJson()">
-                  @if (submittingJson()) {
-                    <mat-spinner diameter="20"></mat-spinner>
-                  } @else {
-                    Submit URLs
-                  }
-                </button>
-              </mat-card>
-            </div>
-          </mat-tab>
-
-          <!-- Job History Tab -->
-          <mat-tab label="Job History">
-            <div class="p-6">
-              <mat-card class="p-6">
-                <div class="flex justify-between items-center mb-4">
-                  <h2 class="text-xl font-semibold">Previous Jobs</h2>
-                  <button mat-button (click)="loadJobs()">
-                    <mat-icon>refresh</mat-icon>
-                    Refresh
-                  </button>
-                </div>
-
-                @if (jobsLoading()) {
-                  <div class="flex justify-center py-8">
-                    <mat-spinner></mat-spinner>
-                  </div>
-                } @else if (jobs().length === 0) {
-                  <p class="text-gray-500 text-center py-8">No jobs yet.</p>
-                } @else {
-                  <table class="w-full">
-                    <thead>
-                      <tr class="border-b">
-                        <th class="text-left py-3 px-4">Job ID</th>
-                        <th class="text-center py-3 px-4">Status</th>
-                        <th class="text-center py-3 px-4">Progress</th>
-                        <th class="text-center py-3 px-4">Created</th>
-                        <th class="text-center py-3 px-4">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (job of jobs(); track job.id) {
-                        <tr class="border-b hover:bg-gray-50">
-                          <td class="py-3 px-4 font-mono text-sm">{{ job.id }}</td>
-                          <td class="text-center py-3 px-4">
-                            <span class="px-2 py-1 rounded text-sm"
-                                  [class.bg-yellow-100]="job.status === 'PENDING'"
-                                  [class.bg-blue-100]="job.status === 'PROCESSING'"
-                                  [class.bg-green-100]="job.status === 'COMPLETED'"
-                                  [class.bg-red-100]="job.status === 'FAILED'">
-                              {{ job.status }}
-                            </span>
-                          </td>
-                          <td class="py-3 px-4">
-                            <div class="flex items-center gap-2">
-                              <mat-progress-bar mode="determinate"
-                                               [value]="getJobProgress(job)"></mat-progress-bar>
-                              <span class="text-sm">{{ job.processedUrls }}/{{ job.totalUrls }}</span>
-                            </div>
-                          </td>
-                          <td class="text-center py-3 px-4">{{ formatDate(job.createdAt) }}</td>
-                          <td class="text-center py-3 px-4">
-                            <button mat-icon-button (click)="viewJobResults(job)"
-                                    [disabled]="job.status !== 'COMPLETED'">
-                              <mat-icon>visibility</mat-icon>
-                            </button>
-                          </td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                }
-              </mat-card>
-            </div>
-          </mat-tab>
-        </mat-tab-group>
-
-        <!-- Job Results Modal -->
-        @if (showResults()) {
-          <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <mat-card class="w-full max-w-4xl max-h-[80vh] overflow-auto m-4 p-6">
-              <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold">Job Results</h2>
-                <button mat-icon-button (click)="closeResults()">
-                  <mat-icon>close</mat-icon>
+            @if (mode() === 'json') {
+              <div class="space-y-4">
+                <label class="block font-mono text-[9px] text-muted uppercase tracking-widest mb-2">Input_Array [URL, URL, ...]</label>
+                <textarea #jsonInput class="input min-h-[200px] border-accent-red/20 focus:border-accent-red" 
+                          placeholder="['https://url1.com', 'https://url2.com']"></textarea>
+                <button (click)="submitJson(jsonInput.value)" [disabled]="loading()"
+                        class="btn btn-outline-green w-full py-4 border-accent-red text-accent-red hover:bg-accent-red hover:text-white uppercase font-bold tracking-[0.2em]">
+                  GENERATE_MASS_LINKS
                 </button>
               </div>
-
-              <table class="w-full">
-                <thead>
-                  <tr class="border-b">
-                    <th class="text-left py-2 px-4">Original URL</th>
-                    <th class="text-left py-2 px-4">Short URL</th>
-                    <th class="text-center py-2 px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (result of results(); track result.id) {
-                    <tr class="border-b">
-                      <td class="py-2 px-4 truncate max-w-md">{{ result.longUrl }}</td>
-                      <td class="py-2 px-4">
-                        @if (result.shortUrl) {
-                          <a [href]="result.shortUrl" target="_blank" class="text-blue-600 hover:underline">
-                            {{ result.shortCode }}
-                          </a>
-                        } @else {
-                          <span class="text-red-500">{{ result.errorMessage }}</span>
-                        }
-                      </td>
-                      <td class="text-center py-2 px-4">
-                        @if (result.success) {
-                          <mat-icon class="text-green-500">check_circle</mat-icon>
-                        } @else {
-                          <mat-icon class="text-red-500">error</mat-icon>
-                        }
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </mat-card>
+            } @else {
+              <div class="space-y-4">
+                <label class="block font-mono text-[9px] text-muted uppercase tracking-widest mb-2">Source_File (.csv)</label>
+                <div class="flex flex-col items-center justify-center border-2 border-dashed border-dark-border p-12 hover:border-accent-red/50 transition-colors cursor-pointer relative">
+                  <input type="file" (change)="onFileSelected($event)" class="absolute inset-0 opacity-0 cursor-pointer">
+                  <div class="text-[10px] font-mono text-muted uppercase tracking-widest text-center">
+                    {{ selectedFile() ? selectedFile()?.name : 'Drop telemetry source or click to browse' }}
+                  </div>
+                </div>
+                <button (click)="submitCsv()" [disabled]="!selectedFile() || loading()"
+                        class="btn btn-outline-green w-full py-4 border-accent-red text-accent-red hover:bg-accent-red hover:text-white uppercase font-bold tracking-[0.2em]">
+                  UPLOAD_AND_PROCESS
+                </button>
+              </div>
+            }
           </div>
-        }
-      </main>
+        </div>
+
+        <!-- History/Status Sidebar -->
+        <div class="lg:col-span-2 space-y-4">
+          <h3 class="font-mono text-xs text-muted uppercase tracking-widest mb-4">Job.Registry</h3>
+          <div class="space-y-3">
+            @for (job of jobs(); track job.id) {
+              <div class="card p-4 hover:border-accent-blue/30 transition-colors cursor-pointer group" (click)="viewResults(job.id)">
+                <div class="flex justify-between items-start mb-2">
+                  <div class="font-mono text-[10px] text-accent-blue truncate">ID: {{ job.id }}</div>
+                  <span class="px-2 py-0.5 bg-dark border border-dark-border font-mono text-[8px] uppercase"
+                        [class.text-accent-green]="job.status === 'COMPLETED'"
+                        [class.text-accent-blue]="job.status === 'PROCESSING'"
+                        [class.text-muted]="job.status === 'PENDING'">
+                    {{ job.status }}
+                  </span>
+                </div>
+                <div class="flex justify-between items-end mt-4">
+                  <div class="font-mono text-[9px] text-muted uppercase">{{ job.createdAt | date:'short' }}</div>
+                  <div class="font-mono text-[12px] text-white opacity-50 group-hover:opacity-100 transition-opacity">
+                    {{ job.processedUrls }}/{{ job.totalUrls }}
+                  </div>
+                </div>
+                <div class="mt-3 h-1 w-full bg-dark overflow-hidden">
+                   <div class="h-full bg-accent-blue transition-all duration-1000" 
+                        [style.width.%]="(job.processedUrls / job.totalUrls) * 100"></div>
+                </div>
+              </div>
+            } @empty {
+              <div class="text-center p-8 border border-dark-border text-[9px] font-mono text-muted uppercase tracking-widest opacity-50">
+                No active jobs in registry
+              </div>
+            }
+          </div>
+        </div>
+      </div>
     </div>
   `
 })
-export class BulkShortenComponent implements OnInit {
-  selectedFile = signal<File | null>(null);
-  uploading = signal(false);
-  submittingJson = signal(false);
-  jsonInput = '';
+export class BulkShortenComponent {
+  mode = signal<'json' | 'csv'>('json');
   jobs = signal<BulkShortenJob[]>([]);
-  jobsLoading = signal(false);
-  showResults = signal(false);
-  results = signal<BulkShortenResult[]>([]);
-  isDragging = signal(false);
+  loading = signal(false);
+  selectedFile = signal<File | null>(null);
 
-  private pollingInterval: any;
-
-  constructor(
-    private bulkService: BulkShortenService,
-    private snackBar: MatSnackBar
-  ) {}
-
-  ngOnInit(): void {
+  constructor(private bulkService: BulkShortenService) {
     this.loadJobs();
   }
 
-  onDragOver(event: DragEvent): void {
-    event.preventDefault();
-    this.isDragging.set(true);
+  loadJobs(): void {
+    this.bulkService.getAllJobs().subscribe((jobs: BulkShortenJob[]) => this.jobs.set(jobs));
   }
 
-  onDrop(event: DragEvent): void {
-    event.preventDefault();
-    this.isDragging.set(false);
-    const files = event.dataTransfer?.files;
-    if (files && files.length > 0) {
-      this.selectedFile.set(files[0]);
+  onFileSelected(event: any): void {
+    const file = event.target.files[0];
+    if (file) this.selectedFile.set(file);
+  }
+
+  submitJson(input: string): void {
+    try {
+      const urls = JSON.parse(input.replace(/'/g, '"'));
+      if (!Array.isArray(urls)) throw new Error();
+      
+      this.loading.set(true);
+      this.bulkService.submitJson(urls).subscribe({
+        next: () => {
+          this.loading.set(false);
+          this.loadJobs();
+        },
+        error: (err: any) => {
+          this.loading.set(false);
+          alert(err.error?.message || 'Mass.Compression failed.');
+        }
+      });
+    } catch {
+      alert('Invalid JSON array format.');
     }
   }
 
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      this.selectedFile.set(input.files[0]);
-    }
-  }
-
-  uploadCsv(): void {
+  submitCsv(): void {
     const file = this.selectedFile();
     if (!file) return;
 
-    this.uploading.set(true);
+    this.loading.set(true);
     this.bulkService.uploadCsv(file).subscribe({
-      next: (response) => {
-        this.snackBar.open('CSV uploaded! Processing...', 'Close', { duration: 3000 });
-        this.pollJobStatus(response.jobId);
+      next: () => {
+        this.loading.set(false);
         this.selectedFile.set(null);
-        this.uploading.set(false);
+        this.loadJobs();
       },
-      error: (err) => {
-        this.uploading.set(false);
-        this.snackBar.open('Upload failed: ' + (err.error?.message || 'Unknown error'), 'Close', { duration: 3000 });
-      }
+      error: () => this.loading.set(false)
     });
   }
 
-  submitJson(): void {
-    try {
-      const urls = JSON.parse(this.jsonInput);
-      if (!Array.isArray(urls)) {
-        throw new Error('Input must be an array');
-      }
-
-      this.submittingJson.set(true);
-      this.bulkService.submitJson(urls).subscribe({
-        next: (response) => {
-          this.snackBar.open('URLs submitted! Processing...', 'Close', { duration: 3000 });
-          this.pollJobStatus(response.jobId);
-          this.jsonInput = '';
-          this.submittingJson.set(false);
-        },
-        error: (err) => {
-          this.submittingJson.set(false);
-          this.snackBar.open('Submission failed: ' + (err.error?.message || 'Invalid JSON'), 'Close', { duration: 3000 });
-        }
-      });
-    } catch (e) {
-      this.snackBar.open('Invalid JSON format', 'Close', { duration: 3000 });
-    }
-  }
-
-  pollJobStatus(jobId: string): void {
-    this.pollingInterval = setInterval(() => {
-      this.bulkService.getJobStatus(jobId).subscribe({
-        next: (job) => {
-          if (job.status === 'COMPLETED' || job.status === 'FAILED') {
-            clearInterval(this.pollingInterval);
-            this.loadJobs();
-            this.snackBar.open(`Job ${job.status.toLowerCase()}!`, 'Close', { duration: 3000 });
-          }
-        }
-      });
-    }, 2000);
-  }
-
-  loadJobs(): void {
-    this.jobsLoading.set(true);
-    this.bulkService.getAllJobs().subscribe({
-      next: (jobs) => {
-        this.jobs.set(jobs);
-        this.jobsLoading.set(false);
-      },
-      error: () => {
-        this.jobsLoading.set(false);
-      }
+  viewResults(jobId: string): void {
+    // This could open a modal or navigate to a results page
+    this.bulkService.getJobResults(jobId).subscribe(results => {
+       console.log('Job Results:', results);
+       alert(`Job ${jobId} results ready in console.`);
     });
-  }
-
-  viewJobResults(job: BulkShortenJob): void {
-    this.bulkService.getJobResults(job.id).subscribe({
-      next: (results) => {
-        this.results.set(results);
-        this.showResults.set(true);
-      }
-    });
-  }
-
-  closeResults(): void {
-    this.showResults.set(false);
-  }
-
-  getJobProgress(job: BulkShortenJob): number {
-    if (!job.totalUrls) return 0;
-    return (job.processedUrls / job.totalUrls) * 100;
-  }
-
-  formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString();
   }
 }

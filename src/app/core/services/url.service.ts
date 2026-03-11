@@ -16,8 +16,8 @@ export interface UrlResponse {
 export interface UrlStats {
   shortCode: string;
   totalClicks: number;
-  firstAccess?: string;
-  lastAccess?: string;
+  firstClick?: string;
+  lastClick?: string;
   deviceTypes: { [key: string]: number };
   browsers: { [key: string]: number };
   referers: { [key: string]: number };

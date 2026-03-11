@@ -1,129 +1,99 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { MatListModule } from '@angular/material/list';
 import { PreferencesService, UrlPreference } from '../../core/services/preferences.service';
 import { AuthService } from '../../core/services/auth.service';
+import { animate, style, transition, trigger } from '@angular/animations';
 
 @Component({
   selector: 'app-preferences',
   standalone: true,
-  imports: [
-    CommonModule,
-    RouterLink,
-    MatCardModule,
-    MatButtonModule,
-    MatIconModule,
-    MatProgressSpinnerModule,
-    MatSnackBarModule,
-    MatSlideToggleModule,
-    MatListModule
+  imports: [CommonModule],
+  animations: [
+    trigger('slideUp', [
+      transition(':enter', [
+        style({ transform: 'translateY(20px)', opacity: 0 }),
+        animate('400ms ease-out', style({ transform: 'translateY(0)', opacity: 1 }))
+      ])
+    ])
   ],
   template: `
-    <div class="min-h-screen bg-gray-50">
-      <!-- Header -->
-      <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div class="flex items-center gap-4">
-            <button mat-button routerLink="/dashboard">
-              <mat-icon>arrow_back</mat-icon>
-            </button>
-            <h1 class="text-2xl font-bold text-gray-800">User Preferences</h1>
-          </div>
-        </div>
-      </header>
+    <div class="max-w-4xl mx-auto space-y-10" @slideUp>
+      <div>
+        <h2 class="text-3xl font-mono font-bold tracking-tighter uppercase text-accent-blue">
+          System.<span class="text-white">Overrides</span>
+        </h2>
+        <p class="text-[10px] font-mono text-muted uppercase tracking-widest mt-1">Configure URL generation heuristics</p>
+      </div>
 
-      <main class="max-w-3xl mx-auto px-4 py-8">
+      <div class="space-y-6">
         @if (loading()) {
-          <div class="flex justify-center py-16">
-            <mat-spinner></mat-spinner>
+          <div class="flex justify-center p-20">
+             <div class="animate-spin w-8 h-8 border-2 border-accent-blue border-t-transparent rounded-full"></div>
           </div>
         } @else {
-          <mat-card class="p-6">
-            <h2 class="text-xl font-semibold mb-4">URL Shortening Strategies</h2>
-            <p class="text-gray-600 mb-6">
-              Configure your preferred URL shortening strategies. Toggle strategies on/off and adjust their priority order.
-            </p>
-
-            <mat-list>
-              @for (pref of preferences(); track pref.id) {
-                <mat-list-item class="mb-4">
-                  <div class="flex items-center justify-between w-full p-4 bg-gray-50 rounded-lg">
-                    <div class="flex items-center gap-4">
-                      <mat-icon class="text-2xl">
-                        @switch (pref.strategyType) {
-                          @case ('RANDOM') { shuffle }
-                          @case ('CUSTOM') { edit }
-                          @case ('USER_PREFERENCE') { settings }
-                        }
-                      </mat-icon>
-                      <div>
-                        <h3 class="font-medium">{{ getStrategyName(pref.strategyType) }}</h3>
-                        <p class="text-sm text-gray-500">{{ getStrategyDescription(pref.strategyType) }}</p>
-                      </div>
-                    </div>
-
-                    <div class="flex items-center gap-4">
-                      <div class="flex items-center gap-2">
-                        <span class="text-sm text-gray-500">Priority:</span>
-                        <button mat-icon-button
-                                (click)="changePriority(pref, -1)"
-                                [disabled]="pref.priority <= 1">
-                          <mat-icon>arrow_upward</mat-icon>
-                        </button>
-                        <span class="font-medium w-8 text-center">{{ pref.priority }}</span>
-                        <button mat-icon-button
-                                (click)="changePriority(pref, 1)"
-                                [disabled]="pref.priority >= preferences().length">
-                          <mat-icon>arrow_downward</mat-icon>
-                        </button>
-                      </div>
-
-                      <mat-slide-toggle
-                        [checked]="pref.enabled"
-                        (change)="toggleStrategy(pref)">
-                      </mat-slide-toggle>
-                    </div>
-                  </div>
-                </mat-list-item>
-              }
-            </mat-list>
-          </mat-card>
-
-          <mat-card class="p-6 mt-6">
-            <h2 class="text-xl font-semibold mb-4">Strategy Information</h2>
-
-            <div class="space-y-4">
-              <div class="p-4 bg-blue-50 rounded-lg">
-                <h3 class="font-medium text-blue-800">Random Strategy</h3>
-                <p class="text-sm text-blue-600 mt-1">
-                  Generates a random short code for each URL. Best for general use.
-                </p>
+          @for (pref of preferences(); track pref.id) {
+            <div class="card flex flex-col md:flex-row items-center justify-between gap-6 hover:border-accent-blue/40 transition-all">
+              <div class="flex items-center gap-6">
+                <div class="w-12 h-12 bg-dark border border-dark-border flex items-center justify-center font-mono text-xl"
+                     [class.text-accent-green]="pref.enabled"
+                     [class.text-muted]="!pref.enabled">
+                  @switch (pref.strategyType) {
+                    @case ('RANDOM') { R }
+                    @case ('CUSTOM') { C }
+                    @case ('USER_PREFERENCE') { P }
+                  }
+                </div>
+                <div>
+                  <h3 class="font-mono text-sm uppercase tracking-widest" [class.text-accent-green]="pref.enabled">
+                    {{ pref.strategyType }}
+                  </h3>
+                  <p class="text-[10px] font-mono text-muted uppercase mt-1">
+                    {{ getStrategyDescription(pref.strategyType) }}
+                  </p>
+                </div>
               </div>
 
-              <div class="p-4 bg-green-50 rounded-lg">
-                <h3 class="font-medium text-green-800">Custom Strategy</h3>
-                <p class="text-sm text-green-600 mt-1">
-                  Allows you to specify a custom short code. Useful for branded URLs.
-                </p>
-              </div>
+              <div class="flex flex-wrap items-center gap-6">
+                <!-- Priority Control -->
+                <div class="flex items-center border border-dark-border bg-dark rounded-none overflow-hidden">
+                  <div class="px-3 py-1 font-mono text-[9px] text-muted uppercase border-r border-dark-border">Priority</div>
+                  <button (click)="changePriority(pref, -1)" 
+                          [disabled]="pref.priority <= 1"
+                          class="px-3 py-1 text-xs hover:bg-dark-border disabled:opacity-30">▲</button>
+                  <div class="px-4 py-1 font-mono text-xs border-x border-dark-border">{{ pref.priority }}</div>
+                  <button (click)="changePriority(pref, 1)" 
+                          [disabled]="pref.priority >= preferences().length"
+                          class="px-3 py-1 text-xs hover:bg-dark-border disabled:opacity-30">▼</button>
+                </div>
 
-              <div class="p-4 bg-purple-50 rounded-lg">
-                <h3 class="font-medium text-purple-800">User Preference Strategy</h3>
-                <p class="text-sm text-purple-600 mt-1">
-                  Uses your configured default preferences. Falls back to other strategies if not available.
-                </p>
+                <!-- Toggle -->
+                <button (click)="toggleStrategy(pref)" 
+                        [class.bg-accent-green]="pref.enabled"
+                        [class.text-dark]="pref.enabled"
+                        [class.border-accent-green]="pref.enabled"
+                        class="btn flex items-center gap-2 group">
+                  <span class="text-[10px] font-bold uppercase tracking-widest">
+                    {{ pref.enabled ? 'INITIALIZED' : 'OFFLINE' }}
+                  </span>
+                  <div class="w-2 h-2 rounded-full" 
+                       [class.bg-dark]="pref.enabled" 
+                       [class.bg-accent-red]="!pref.enabled"
+                       [class.animate-pulse]="pref.enabled"></div>
+                </button>
               </div>
             </div>
-          </mat-card>
+          }
         }
-      </main>
+      </div>
+
+      <div class="card bg-accent-blue/5 border-dashed border-accent-blue/20">
+        <h3 class="font-mono text-[10px] text-accent-blue uppercase tracking-widest mb-4">Neural_Strategy_Info</h3>
+        <p class="font-mono text-[11px] text-muted leading-relaxed uppercase opacity-80">
+          The system evaluates enabled strategies in descending order of priority. 
+          If a strategy fails to produce a valid identifier (e.g. custom slug collision), 
+          the protocol falls back to the next available heuristic.
+        </p>
+      </div>
     </div>
   `
 })
@@ -133,8 +103,7 @@ export class PreferencesComponent implements OnInit {
 
   constructor(
     private preferencesService: PreferencesService,
-    private authService: AuthService,
-    private snackBar: MatSnackBar
+    private authService: AuthService
   ) {}
 
   ngOnInit(): void {
@@ -145,59 +114,29 @@ export class PreferencesComponent implements OnInit {
     this.loading.set(true);
     this.preferencesService.getPreferences().subscribe({
       next: (prefs) => {
-        // Sort by priority
         this.preferences.set(prefs.sort((a, b) => a.priority - b.priority));
         this.loading.set(false);
       },
-      error: () => {
-        this.loading.set(false);
-        this.snackBar.open('Failed to load preferences', 'Close', { duration: 3000 });
-      }
+      error: () => this.loading.set(false)
     });
   }
 
   toggleStrategy(pref: UrlPreference): void {
     const userId = this.authService.getUserId();
-    this.preferencesService.toggleStrategy(userId, pref.strategyType).subscribe({
-      next: (updated) => {
-        this.loadPreferences();
-        this.snackBar.open('Strategy updated', 'Close', { duration: 2000 });
-      },
-      error: () => {
-        this.snackBar.open('Failed to update strategy', 'Close', { duration: 3000 });
-      }
-    });
+    this.preferencesService.toggleStrategy(userId, pref.strategyType).subscribe(() => this.loadPreferences());
   }
 
   changePriority(pref: UrlPreference, delta: number): void {
     const userId = this.authService.getUserId();
     const newPriority = pref.priority + delta;
-
-    this.preferencesService.changePriority(userId, pref.strategyType, newPriority).subscribe({
-      next: () => {
-        this.loadPreferences();
-        this.snackBar.open('Priority updated', 'Close', { duration: 2000 });
-      },
-      error: () => {
-        this.snackBar.open('Failed to update priority', 'Close', { duration: 3000 });
-      }
-    });
-  }
-
-  getStrategyName(type: string): string {
-    switch (type) {
-      case 'RANDOM': return 'Random';
-      case 'CUSTOM': return 'Custom';
-      case 'USER_PREFERENCE': return 'User Preference';
-      default: return type;
-    }
+    this.preferencesService.changePriority(userId, pref.strategyType, newPriority).subscribe(() => this.loadPreferences());
   }
 
   getStrategyDescription(type: string): string {
     switch (type) {
-      case 'RANDOM': return 'Automatically generates random short codes';
-      case 'CUSTOM': return 'Allows you to specify custom short codes';
-      case 'USER_PREFERENCE': return 'Uses your default preferences';
+      case 'RANDOM': return 'Entropy-based code generation';
+      case 'CUSTOM': return 'User-defined branded identifier';
+      case 'USER_PREFERENCE': return 'Heuristic pool injection';
       default: return '';
     }
   }
