@@ -14,21 +14,25 @@ import { forkJoin, map } from 'rxjs';
     <div class="dashboard-grid">
       <!-- Stat Cards -->
       <section class="stats-row">
-        <div class="stat-card panel corner-accent bracket-tl">
-          <span class="stat-label">TOTAL URLS</span>
+        <div class="stat-card panel full-brackets corner-accent">
+          <span class="stat-label label-cyan">TOTAL URLS</span>
           <span class="stat-value">{{ totalUrls() }}</span>
+          <div class="bottom-corner"></div>
         </div>
-        <div class="stat-card panel corner-accent bracket-tr">
-          <span class="stat-label">TOTAL CLICKS</span>
-          <span class="stat-value text-green">{{ totalClicks() }}</span>
+        <div class="stat-card panel full-brackets corner-accent">
+          <span class="stat-label label-cyan">TOTAL CLICKS</span>
+          <span class="stat-value value-green">{{ totalClicks() }}</span>
+          <div class="bottom-corner"></div>
         </div>
-        <div class="stat-card panel corner-accent bracket-bl">
-          <span class="stat-label">ACTIVE LINKS</span>
+        <div class="stat-card panel full-brackets corner-accent">
+          <span class="stat-label label-cyan">ACTIVE LINKS</span>
           <span class="stat-value text-cyan">{{ activeLinks() }}</span>
+          <div class="bottom-corner"></div>
         </div>
-        <div class="stat-card panel corner-accent bracket-br">
-          <span class="stat-label">EXPIRED LINKS</span>
+        <div class="stat-card panel full-brackets corner-accent">
+          <span class="stat-label label-cyan">EXPIRED LINKS</span>
           <span class="stat-value text-red">{{ expiredLinks() }}</span>
+          <div class="bottom-corner"></div>
         </div>
       </section>
 
@@ -54,30 +58,30 @@ import { forkJoin, map } from 'rxjs';
                   <td>{{ url.clickCount }}</td>
                 </tr>
               } @empty {
-                <tr><td colspan="4" class="text-center text-dim">NO_RECORD_FOUND</td></tr>
+                <tr><td colspan="4" class="text-center text-dim py-20">NO_RECENT_ACTIVITY</td></tr>
               }
             </tbody>
           </table>
         </section>
 
         <!-- System Status -->
-        <section class="panel corner-accent bracket-tr bracket-br system-status">
-          <h3 class="panel-title">SYSTEM_STATUS.INF</h3>
+        <section class="panel corner-accent system-status">
+          <h3 class="panel-title">SYSTEM_STATUS</h3>
           <div class="status-items">
             <div class="status-item">
-              <span>CORE SERVICE</span>
+              <span class="label-cyan">CORE SERVICE</span>
               <span class="status-indicator" [class.bg-green]="coreStatus() === 'UP'" [class.bg-red]="coreStatus() !== 'UP'"></span>
-              <span class="status-text">{{ coreStatus() || 'NODE_OFFLINE' }}</span>
+              <span class="status-text">{{ coreStatus() === 'UP' ? 'NODE_ONLINE' : 'NODE_OFFLINE' }}</span>
             </div>
             <div class="status-item">
-              <span>REDIS CLUSTER</span>
+              <span class="label-cyan">REDIS CLUSTER</span>
               <span class="status-indicator" [class.bg-green]="redisStatus() === 'UP'" [class.bg-red]="redisStatus() !== 'UP'"></span>
-              <span class="status-text">{{ redisStatus() || 'NODE_OFFLINE' }}</span>
+              <span class="status-text">{{ redisStatus() === 'UP' ? 'NODE_ONLINE' : 'NODE_OFFLINE' }}</span>
             </div>
             <div class="status-item">
-              <span>LOAD BALANCER</span>
+              <span class="label-cyan">LOAD BALANCER</span>
               <span class="status-indicator bg-green"></span>
-              <span class="status-text">UP</span>
+              <span class="status-text">NODE_ONLINE</span>
             </div>
           </div>
 
@@ -153,20 +157,33 @@ export class DashboardComponent implements OnInit {
 
   loadDashboardData(): void {
     // 1. Fetch summary stats for cards
-    this.analyticsService.getSummaryStats().subscribe(stats => {
-      this.totalUrls.set(stats.totalUrls);
-      this.totalClicks.set(stats.totalClicks);
-      this.activeLinks.set(stats.activeLinks);
-      this.expiredLinks.set(stats.expiredLinks);
+    this.analyticsService.getSummaryStats().subscribe({
+      next: (stats) => {
+        this.totalUrls.set(stats.totalUrls);
+        this.totalClicks.set(stats.totalClicks);
+        this.activeLinks.set(stats.activeLinks);
+        this.expiredLinks.set(stats.expiredLinks);
+      },
+      error: (err) => console.error('Failed to load summary stats', err)
     });
 
     // 2. Fetch recent URLs for the table
-    this.urlService.getMyUrls().subscribe(urls => {
-      this.recentUrls.set(urls.slice(0, 5));
+    this.urlService.getMyUrls().subscribe({
+      next: (urls) => {
+        this.recentUrls.set(urls.slice(0, 5));
+      },
+      error: (err) => console.error('Failed to load recent URLs', err)
     });
 
-    // 2. System Status
-    this.healthService.getCoreHealth().subscribe(res => this.coreStatus.set(res.status));
-    this.healthService.getRedisHealth().subscribe(res => this.redisStatus.set(res.status));
+    // 3. System Status
+    this.healthService.getCoreHealth().subscribe({
+      next: (res) => this.coreStatus.set(res.status),
+      error: () => this.coreStatus.set('DOWN')
+    });
+    
+    this.healthService.getRedisHealth().subscribe({
+      next: (res) => this.redisStatus.set(res.status),
+      error: () => this.redisStatus.set('DOWN')
+    });
   }
 }

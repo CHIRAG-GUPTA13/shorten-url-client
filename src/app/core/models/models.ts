@@ -79,3 +79,15 @@ export interface HealthResponse {
   timestamp?: number;
   [key: string]: any;
 }
+export interface QrCodeResponse {
+  shortCode: string;
+  qrCodeBase64: string;
+  fullShortUrl: string;
+}
+
+export interface ApiResponse<T> {
+  code: number;
+  message: string;
+  data: T;
+  timestamp: number;
+}

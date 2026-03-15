@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { UrlService } from '../../core/services/url.service';
 import { UrlResponse } from '../../core/models/models';
@@ -20,6 +20,13 @@ import { animate, style, transition, trigger, state } from '@angular/animations'
     <div class="panel corner-accent bracket-tl bracket-tr">
       <h2 class="panel-title">ARCHIVE_REGISTRY.DB</h2>
       
+      <div class="search-bar mb-20">
+        <div class="input-with-prefix">
+          <span class="input-prefix text-cyan">SCAN_QUERY ></span>
+          <input type="text" class="input" placeholder="SEARCH_BY_CODE_OR_URL..." (input)="onSearch($event)">
+        </div>
+      </div>
+ 
       <div class="table-container">
         <table class="terminal-table">
           <thead>
@@ -29,15 +36,22 @@ import { animate, style, transition, trigger, state } from '@angular/animations'
               <th>CREATED</th>
               <th>STATUS</th>
               <th>CLICKS</th>
-              <th class="text-right">OPS</th>
+              <th class="text-right">ACTIONS</th>
             </tr>
           </thead>
           <tbody>
-            @for (url of urls(); track url.id) {
+            @for (url of filteredUrls(); track url.id) {
               <tr class="row-hover" (click)="toggleRow(url.shortCode)">
-                <td class="text-green font-bold">/{{ url.shortCode }}</td>
+                <td class="text-green font-bold">
+                  <div class="code-cell">
+                    /{{ url.shortCode }}
+                    <button class="copy-small" (click)="copyCode($event, url.shortCode)" [title]="'COPY_LINK'">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                  </div>
+                </td>
                 <td class="text-dim truncate" style="max-width: 250px;">{{ url.originalUrl }}</td>
-                <td>{{ url.createdAt | date:'shortDate' }}</td>
+                <td>{{ url.createdAt | date:'mediumDate' }}</td>
                 <td>
                   <span class="badge" [class.badge-active]="isActive(url)" [class.badge-expired]="isExpired(url)">
                     {{ getStatus(url) }}
@@ -46,7 +60,7 @@ import { animate, style, transition, trigger, state } from '@angular/animations'
                 <td class="text-cyan">{{ url.clickCount }}</td>
                 <td class="text-right ops-cell" (click)="$event.stopPropagation()">
                   <button class="btn-icon text-red" (click)="confirmDelete(url.shortCode)">
-                    {{ deleteConfirm()[url.shortCode] ? 'CONFIRM?' : 'KILL' }}
+                    {{ deleteConfirm()[url.shortCode] ? 'CONFIRM?' : 'DELETE' }}
                   </button>
                 </td>
               </tr>
@@ -88,9 +102,19 @@ import { animate, style, transition, trigger, state } from '@angular/animations'
   styles: [`
     .panel-title { font-size: 14px; margin-bottom: 25px; color: var(--accent-green); border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
     
+    .search-bar { width: 100%; max-width: 400px; }
+    .mb-20 { margin-bottom: 20px; }
+    .input-with-prefix { display: flex; align-items: center; border: 1px solid var(--border-color); background: var(--bg-color); }
+    .input-prefix { padding: 0 15px; font-size: 10px; flex-shrink: 0; }
+    .input-with-prefix .input { border: none; }
+
     .table-container { overflow-x: auto; }
     .row-hover { cursor: pointer; transition: background 0.2s; }
     .row-hover:hover { background: rgba(200, 255, 0, 0.05); }
+
+    .code-cell { display: flex; align-items: center; gap: 8px; }
+    .copy-small { background: transparent; border: none; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; transition: 0.2s; }
+    .copy-small:hover { color: var(--accent-cyan); }
 
     .ops-cell button { background: transparent; border: 1px solid currentColor; font-family: inherit; font-size: 9px; padding: 4px 8px; cursor: pointer; text-transform: uppercase; }
     .ops-cell button:hover { background: rgba(255, 62, 62, 0.1); }
@@ -108,12 +132,23 @@ import { animate, style, transition, trigger, state } from '@angular/animations'
     .detail-item { display: flex; flex-direction: column; gap: 5px; }
     .detail-item .label { font-size: 9px; color: var(--text-dim); }
     .detail-item .value { font-size: 11px; word-break: break-all; }
+    .py-40 { padding-top: 40px; padding-bottom: 40px; }
   `]
 })
 export class ArchivesComponent implements OnInit {
   urls = signal<UrlResponse[]>([]);
+  searchQuery = signal('');
   expandedRow = signal<string | null>(null);
   deleteConfirm = signal<{ [key: string]: boolean }>({});
+ 
+  filteredUrls = computed(() => {
+    const query = this.searchQuery().toLowerCase();
+    if (!query) return this.urls();
+    return this.urls().filter(u => 
+      u.shortCode.toLowerCase().includes(query) || 
+      u.originalUrl.toLowerCase().includes(query)
+    );
+  });
 
   constructor(private urlService: UrlService) {}
 
@@ -124,7 +159,17 @@ export class ArchivesComponent implements OnInit {
   loadUrls() {
     this.urlService.getMyUrls().subscribe(res => this.urls.set(res));
   }
-
+ 
+  onSearch(event: any) {
+    this.searchQuery.set(event.target.value);
+  }
+ 
+  copyCode(event: Event, code: string) {
+    event.stopPropagation();
+    const url = this.getFullUrl(code);
+    navigator.clipboard.writeText(url);
+  }
+ 
   toggleRow(code: string) {
     this.expandedRow.set(this.expandedRow() === code ? null : code);
   }

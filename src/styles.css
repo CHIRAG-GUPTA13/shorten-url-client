@@ -3,13 +3,14 @@
 :root {
   --bg-color: #0a0a0f;
   --bg-darker: #050508;
-  --accent-green: #c8ff00;
+  --accent-green: #c8ff00; /* Lime green */
   --accent-cyan: #00f2ff;
   --accent-red: #ff3e3e;
   --text-main: #e0e0e0;
   --text-dim: #666666;
   --border-color: #1a1a24;
   --glow-green: 0 0 12px rgba(200, 255, 0, 0.4);
+  --glow-cyan: 0 0 12px rgba(0, 242, 255, 0.4);
 }
 
 * {
@@ -87,21 +88,67 @@ a:hover {
   position: relative;
 }
 
-/* Corner Brackets */
-.corner-accent::before,
+/* Corner Brackets Utility */
+.corner-accent {
+  position: relative;
+}
+
+.corner-accent::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid var(--accent-green);
+  border-left: 2px solid var(--accent-green);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .corner-accent::after {
   content: "";
   position: absolute;
+  top: -2px;
+  right: -2px;
   width: 10px;
   height: 10px;
-  border: 2px solid var(--accent-green);
+  border-top: 2px solid var(--accent-green);
+  border-right: 2px solid var(--accent-green);
   pointer-events: none;
+  z-index: 1;
 }
 
-.bracket-tl::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
-.bracket-tr::after { top: -2px; right: -2px; border-left: 0; border-bottom: 0; }
-.bracket-bl::before { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
-.bracket-br::after { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+/* Bottom brackets for full 4-corner look */
+.full-brackets .bottom-corner::before {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: -2px;
+  width: 10px;
+  height: 10px;
+  border-bottom: 2px solid var(--accent-green);
+  border-left: 2px solid var(--accent-green);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.full-brackets .bottom-corner::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-bottom: 2px solid var(--accent-green);
+  border-right: 2px solid var(--accent-green);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.label-cyan { color: var(--accent-cyan); text-transform: uppercase; font-size: 10px; letter-spacing: 0.1em; }
+.value-green { color: var(--accent-green); font-weight: 700; }
+.empty-state { text-align: center; color: var(--text-dim); padding: 40px 20px; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; border: 1px dashed var(--border-color); }
 
 .btn {
   background: transparent;

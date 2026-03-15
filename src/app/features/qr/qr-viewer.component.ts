@@ -10,11 +10,11 @@ import { environment } from '../../../environments/environment';
   template: `
     <div class="qr-container">
       <div class="panel corner-accent bracket-tl bracket-tr">
-        <h2 class="panel-title">QR_ENCODING.MATRIX</h2>
+        <h2 class="panel-title">QR_GENERATOR</h2>
         
         <div class="input-group">
           <input #codeBox type="text" class="input" placeholder="ENTER_SHORT_CODE (e.g. ab12cd)" (keyup.enter)="loadQR(codeBox.value)">
-          <button class="btn btn-primary" (click)="loadQR(codeBox.value)">ENCODE_MATRIX</button>
+          <button class="btn btn-primary" (click)="loadQR(codeBox.value)">GENERATE_QR</button>
         </div>
       </div>
 
@@ -22,16 +22,26 @@ import { environment } from '../../../environments/environment';
         <div class="qr-display mt-20" @fadeUp>
           <!-- Terminal-style frame -->
           <div class="qr-frame-outer">
-            <div class="panel qr-frame corner-accent bracket-tl bracket-tr bracket-bl bracket-br">
-              <div class="qr-image-wrapper">
+            <div class="size-selector mb-10">
+              <span class="label-cyan mr-10">SIZE:</span>
+              <div class="toggle-switch">
+                <button class="toggle-btn" [class.active]="qrSize() === 128" (click)="qrSize.set(128)">128PX</button>
+                <button class="toggle-btn" [class.active]="qrSize() === 256" (click)="qrSize.set(256)">256PX</button>
+                <button class="toggle-btn" [class.active]="qrSize() === 512" (click)="qrSize.set(512)">512PX</button>
+              </div>
+            </div>
+
+            <div class="panel qr-frame corner-accent full-brackets">
+              <div class="qr-image-wrapper" [style.width.px]="qrSize()" [style.height.px]="qrSize()">
                  <img [src]="qrBlobUrl()" alt="QR_MATRIX" class="qr-image">
               </div>
+              <div class="bottom-corner"></div>
             </div>
             
             <div class="qr-controls">
-              <button class="btn full-width" (click)="downloadQR()">DOWNLOAD_AS.PNG</button>
+              <button class="btn btn-primary full-width" (click)="downloadQR()">DOWNLOAD_PNG</button>
               <div class="info-strip mt-10">
-                 <span class="label">MAPPED_URL:</span>
+                 <span class="label-cyan">MAPPED_URL:</span>
                  <span class="value text-cyan">{{ getFullUrl() }}</span>
               </div>
             </div>
@@ -55,9 +65,9 @@ import { environment } from '../../../environments/environment';
         }
       } @else {
         <div class="panel placeholder-panel mt-20">
-            <p class="text-dim text-center py-40 uppercase tracking-[0.2em] font-mono">
-               No active matrix segment found. <br>
-               Initialize scan to render QR node.
+            <p class="text-dim text-center py-40 uppercase tracking-[0.1em] font-mono">
+               Enter a short code to generate a QR code. <br>
+               <span class="text-[10px] opacity-50 mt-10 block">System awaiting routing parameter...</span>
             </p>
         </div>
       }
@@ -68,21 +78,27 @@ import { environment } from '../../../environments/environment';
     .panel-title { font-size: 14px; margin-bottom: 25px; color: var(--accent-green); border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
 
     .input-group { display: flex; gap: 10px; }
-    .qr-frame-outer { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    .qr-frame-outer { display: flex; flex-direction: column; align-items: center; gap: 15px; }
     
-    .qr-frame { background: white; padding: 20px; border: 1px solid var(--accent-green) !important; width: fit-content; }
-    .qr-image-wrapper { width: 220px; height: 220px; display: flex; align-items: center; justify-content: center; }
-    .qr-image { width: 100%; height: 100%; image-rendering: pixelated; }
+    .size-selector { display: flex; align-items: center; }
+    .mr-10 { margin-right: 10px; }
+    .mb-10 { margin-bottom: 10px; }
+    .toggle-switch { display: flex; background: var(--bg-color); border: 1px solid var(--border-color); padding: 2px; }
+    .toggle-btn { padding: 4px 10px; font-size: 9px; cursor: pointer; border: none; background: transparent; color: var(--text-dim); }
+    .toggle-btn.active { background: var(--accent-cyan); color: var(--bg-darker); font-weight: 700; }
 
+    .qr-frame { background: white; padding: 20px; border: 1px solid var(--accent-green) !important; width: fit-content; }
+    .qr-image-wrapper { display: flex; align-items: center; justify-content: center; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); max-width: 100%; }
+    .qr-image { width: 100%; height: 100%; image-rendering: pixelated; }
+ 
     .qr-controls { width: 100%; }
     .info-strip { display: flex; flex-direction: column; gap: 5px; font-size: 10px; padding: 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color); }
-    .info-strip .label { color: var(--text-dim); }
     .info-strip .value { word-break: break-all; }
-
+ 
     .details-panel { border-color: var(--border-color); padding: 10px 20px; }
     .raw-data-box { background: var(--bg-color); padding: 10px; border: 1px solid var(--border-color); overflow-x: auto; }
     .raw-data-box pre { font-size: 8px; color: var(--text-dim); }
-
+ 
     .full-width { width: 100%; justify-content: center; }
     .mt-20 { margin-top: 20px; }
     .mt-10 { margin-top: 10px; }
@@ -91,10 +107,12 @@ import { environment } from '../../../environments/environment';
     .text-dim { color: var(--text-dim); }
     .text-cyan { color: var(--accent-cyan); }
     .text-green { color: var(--accent-green); }
+    .label-cyan { color: var(--accent-cyan); text-transform: uppercase; font-size: 10px; letter-spacing: 0.1em; }
   `]
 })
 export class QrViewerComponent {
   currentCode = signal('');
+  qrSize = signal(256);
   qrBlobUrl = signal<string | null>(null);
   rawBase64 = signal<string | null>(null);
   errorMessage = signal<string | null>(null);
@@ -108,7 +126,13 @@ export class QrViewerComponent {
 
     // Fetch Base64 segment
     this.urlService.getQrCode(code).subscribe({
-      next: (res) => this.rawBase64.set(res.image),
+      next: (res) => {
+        this.rawBase64.set(res.qrCodeBase64);
+        // If blob loading isn't preferred or fails, we can use Base64 as fallback
+        if (!this.qrBlobUrl()) {
+          this.qrBlobUrl.set(`data:image/png;base64,${res.qrCodeBase64}`);
+        }
+      },
       error: (err) => {
          this.rawBase64.set(null);
          this.errorMessage.set(`[${err.status}] ENCODING_SCAN_FAILED`);

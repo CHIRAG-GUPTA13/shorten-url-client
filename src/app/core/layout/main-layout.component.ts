@@ -79,7 +79,7 @@ export const slideInAnimation =
               <span class="username">@{{ authService.getUsername() }}</span>
               <span class="user-level">LEVEL 07 ADMIN</span>
             </div>
-            <button class="btn logout-btn" (click)="authService.logout()">TERMINATE SESSION</button>
+            <button class="btn logout-btn" (click)="authService.logout()">LOGOUT</button>
           </div>
         </aside>
 
@@ -111,6 +111,13 @@ export const slideInAnimation =
       font-size: 10px;
       letter-spacing: 0.2em;
       color: var(--text-dim);
+
+      @media (max-width: 480px) {
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        height: auto;
+      }
     }
 
     .secure-tag { color: var(--accent-cyan); }
@@ -122,6 +129,12 @@ export const slideInAnimation =
       overflow: hidden;
     }
 
+    @media (max-width: 768px) {
+      .main-body {
+        flex-direction: column;
+      }
+    }
+
     .sidebar {
       width: 260px;
       display: flex;
@@ -130,6 +143,10 @@ export const slideInAnimation =
       border-right: 1px solid var(--border-color);
       padding: 30px 0;
       z-index: 10;
+      @media (max-width: 768px) {
+        width: 100%;
+        padding: 15px 0;
+      }
     }
 
     .brand {
@@ -166,7 +183,7 @@ export const slideInAnimation =
       color: var(--accent-green);
     }
 
-    .nav-num { color: var(--text-dim); margin-right: 10px; width: 25px; display: inline-block; }
+    .nav-num { color: var(--accent-cyan); margin-right: 10px; width: 25px; display: inline-block; opacity: 0.7; }
 
     .active-nav {
       background: rgba(0, 242, 255, 0.1);

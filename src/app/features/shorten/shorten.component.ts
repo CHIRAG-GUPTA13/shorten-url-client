@@ -24,11 +24,11 @@ import { animate, style, transition, trigger } from '@angular/animations';
         
         <form [formGroup]="shortenForm" (ngSubmit)="onShorten()" class="terminal-form">
           <div class="form-group">
-            <label>SOURCE_URL (LONG)</label>
+            <label class="label-cyan">TARGET_URL (LONG)</label>
             <div class="input-wrapper">
-              <input type="url" formControlName="longUrl" class="input" placeholder="https://external-resource.net/data/stream/..." #longUrlInput>
+              <input type="url" formControlName="longUrl" class="input" placeholder="https://external-resource.net/data/stream/..." #longUrlInput maxlength="2048">
               <div class="char-counter" [class.text-green]="longUrlInput.value.length > 0">
-                LEN: {{ longUrlInput.value.length }}
+                LEN: {{ longUrlInput.value.length }} / 2048
               </div>
             </div>
             @if (shortenForm.get('longUrl')?.touched && shortenForm.get('longUrl')?.invalid) {
@@ -48,20 +48,34 @@ import { animate, style, transition, trigger } from '@angular/animations';
             <div class="form-group" @slideUpFade>
                 <label>CUSTOM_ALIAS</label>
                 <div class="flex-input">
-                    <span class="input-prefix">linkcore.io/</span>
+                    <span class="input-prefix">DOMAIN/</span>
                     <input type="text" formControlName="customSlug" class="input" placeholder="my-custom-path">
                 </div>
             </div>
           }
 
-          <div class="form-group">
-            <label>EXPIRATION_PROTOCOL (OPTIONAL)</label>
-            <input type="datetime-local" formControlName="expiresAt" class="input">
+          <div class="mode-toggle">
+            <span class="label-cyan">EXPIRATION:</span>
+            <div class="toggle-switch" (click)="toggleExpiry()">
+              <button type="button" class="toggle-btn" [class.active]="!expiryEnabled()">NO_EXPIRY</button>
+              <button type="button" class="toggle-btn" [class.active]="expiryEnabled()">SET_DATE</button>
+            </div>
           </div>
+ 
+          @if (expiryEnabled()) {
+            <div class="form-group" @slideUpFade>
+              <label class="label-cyan">EXPIRATION_DATE (MM/DD/YYYY)</label>
+              <input type="datetime-local" formControlName="expiresAt" class="input">
+            </div>
+          } @else {
+            <div class="info-note-box py-10" @slideUpFade>
+              <p class="text-dim text-[10px]">> NOTE: FREE_ACCOUNTS_AUTO_EXPIRE_INACTIVE_LINKS_AFTER_1_YEAR</p>
+            </div>
+          }
 
           <button type="submit" class="btn btn-primary full-width" [disabled]="loading()">
             @if (loading()) { <span class="pulse-dot bg-dark"></span> PROCESSING... } 
-            @else { EXECUTE_COMPRESSION }
+            @else { GENERATE_LINK }
           </button>
         </form>
       </div>
@@ -144,6 +158,7 @@ import { animate, style, transition, trigger } from '@angular/animations';
 export class ShortenComponent {
   shortenForm: FormGroup;
   customMode = signal(false);
+  expiryEnabled = signal(false);
   loading = signal(false);
   result = signal<any | null>(null);
   copied = signal(false);
@@ -161,6 +176,13 @@ export class ShortenComponent {
     this.customMode.update(v => !v);
     if (!this.customMode()) {
       this.shortenForm.patchValue({ customSlug: '' });
+    }
+  }
+
+  toggleExpiry() {
+    this.expiryEnabled.update(v => !v);
+    if (!this.expiryEnabled()) {
+      this.shortenForm.patchValue({ expiresAt: '' });
     }
   }
 

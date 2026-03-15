@@ -14,34 +14,37 @@ import { ActivatedRoute } from '@angular/router';
   template: `
     <div class="analytics-container">
       <div class="top-search panel corner-accent bracket-tl bracket-tr">
-        <h2 class="panel-title">TELEMETRY.SCANNER</h2>
+        <h2 class="panel-title">LINK_ANALYTICS</h2>
         <div class="search-bar">
           <input #codeBox type="text" class="input" placeholder="ENTER_SHORT_CODE (e.g. ab12cd)" (keyup.enter)="loadStats(codeBox.value)">
-          <button class="btn btn-primary" (click)="loadStats(codeBox.value)">DEPLOY_SCAN</button>
+          <button class="btn btn-primary" (click)="loadStats(codeBox.value)">FETCH_STATS</button>
         </div>
       </div>
 
       <!-- Top Stat Bar -->
       <div class="stat-bar" @fadeUp>
-        <div class="panel stat-min-card">
-          <span class="label">AGGREGATE_CLICKS</span>
+        <div class="panel stat-min-card full-brackets corner-accent">
+          <span class="label label-cyan">TOTAL_CLICKS</span>
           <span class="value">{{ stats()?.totalClicks || 0 }}</span>
+          <div class="bottom-corner"></div>
         </div>
-        <div class="panel stat-min-card">
-          <span class="label">UNIQUE_SIGNALS</span>
-          <span class="value text-cyan">{{ stats()?.totalClicks ? (stats()?.totalClicks! * 0.8 | number:'1.0-0') : 0 }}</span>
+        <div class="panel stat-min-card full-brackets corner-accent">
+          <span class="label label-cyan">UNIQUE_VISITORS (EST)</span>
+          <span class="value value-green">{{ stats()?.totalClicks ? (stats()?.totalClicks! * 0.8 | number:'1.0-0') : 0 }}</span>
+          <div class="bottom-corner"></div>
         </div>
-        <div class="panel stat-min-card">
-          <span class="label">PEAK_PROTOCOL</span>
-          <span class="value text-green">HTTP/S</span>
+        <div class="panel stat-min-card full-brackets corner-accent">
+          <span class="label label-cyan">REFERRER_SOURCE</span>
+          <span class="value text-cyan">DIRECT_HIT</span>
+          <div class="bottom-corner"></div>
         </div>
       </div>
 
       @if (stats()) {
         <div class="charts-grid" @fadeUp>
           <!-- Device Split -->
-          <div class="panel corner-accent bracket-tl">
-            <h3 class="chart-title">DEVICE_TELEMETRY</h3>
+          <div class="panel corner-accent">
+            <h3 class="chart-title">DEVICE_DISTRIBUTION</h3>
             <div class="chart-wrapper">
               <canvas baseChart
                       [data]="deviceData"
@@ -52,8 +55,8 @@ import { ActivatedRoute } from '@angular/router';
           </div>
 
           <!-- Browser Split -->
-          <div class="panel corner-accent bracket-tr">
-            <h3 class="chart-title">CLIENT_ENVIRONMENT</h3>
+          <div class="panel corner-accent">
+            <h3 class="chart-title">BROWSER_ENVIRONMENT</h3>
             <div class="chart-wrapper">
               <canvas baseChart
                       [data]="browserData"
@@ -64,8 +67,15 @@ import { ActivatedRoute } from '@angular/router';
           </div>
 
           <!-- Top performing (Bar) -->
-          <div class="panel full-width-chart corner-accent bracket-bl bracket-br">
-            <h3 class="chart-title">TEMPORAL_LOAD_DISTRIBUTION</h3>
+          <div class="panel full-width-chart corner-accent">
+            <div class="chart-header-flex">
+              <h3 class="chart-title no-border">CLICK_DISTRIBUTION_BY_TARGET</h3>
+              <div class="range-selector">
+                <button class="toggle-btn" [class.active]="range() === '7D'" (click)="range.set('7D')">7D</button>
+                <button class="toggle-btn" [class.active]="range() === '30D'" (click)="range.set('30D')">30D</button>
+                <button class="toggle-btn" [class.active]="range() === 'ALL'" (click)="range.set('ALL')">ALL</button>
+              </div>
+            </div>
             <div class="chart-wrapper-large">
                <canvas baseChart
                        [data]="barData"
@@ -95,8 +105,15 @@ import { ActivatedRoute } from '@angular/router';
 
     .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .full-width-chart { grid-column: span 2; }
-    .chart-title { font-size: 11px; color: var(--accent-green); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+    .chart-header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; padding-bottom: 10px; }
+    .chart-title { font-size: 11px; color: var(--accent-green); transition: 0.2s; }
+    .chart-title.no-border { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .chart-title:not(.no-border) { border-bottom: 1px solid var(--border-color); margin-bottom: 20px; padding-bottom: 10px; }
     
+    .range-selector { display: flex; background: var(--bg-color); padding: 2px; }
+    .range-selector .toggle-btn { padding: 4px 10px; font-size: 9px; cursor: pointer; border: none; background: transparent; color: var(--text-dim); }
+    .range-selector .toggle-btn.active { background: var(--accent-cyan); color: var(--bg-darker); font-weight: 700; }
+
     .chart-wrapper { height: 260px; position: relative; }
     .chart-wrapper-large { height: 300px; position: relative; }
 
@@ -110,7 +127,8 @@ import { ActivatedRoute } from '@angular/router';
 export class AnalyticsComponent implements OnInit {
   stats = signal<UrlStats | null>(null);
   currentCode = signal('');
-
+  range = signal('ALL');
+ 
   // Charts
   deviceData: ChartData<'doughnut'> = {
     labels: ['Desktop', 'Mobile', 'Tablet'],

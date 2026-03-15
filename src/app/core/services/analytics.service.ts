@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { UrlService } from './url.service';
-import { UrlStats, MyUrlsStatsDto, UrlSummaryStats } from '../models/models';
+import { UrlStats, MyUrlsStatsDto, UrlSummaryStats, ApiResponse } from '../models/models';
 import { environment } from '../../../environments/environment';
 
 export interface TopPerformingUrl {
@@ -29,12 +29,12 @@ export class AnalyticsService {
 
   // Get summary stats - calls new backend endpoint
   getSummaryStats(): Observable<UrlSummaryStats> {
-    return this.http.get<UrlSummaryStats>(`${this.urlsApiUrl}/my-urls/stats/summary`);
+    return this.http.get<ApiResponse<UrlSummaryStats>>(`${this.urlsApiUrl}/my-urls/stats/summary`).pipe(map(res => res.data));
   }
 
   // Get top performing URLs - calls new backend endpoint
   getTopPerformingUrls(limit: number = 10): Observable<TopPerformingUrl[]> {
     const params = { limit: limit.toString() };
-    return this.http.get<TopPerformingUrl[]>(`${this.apiUrl}/analytics/top-performing`, { params });
+    return this.http.get<ApiResponse<TopPerformingUrl[]>>(`${this.apiUrl}/analytics/top-performing`, { params }).pipe(map(res => res.data));
   }
 }
